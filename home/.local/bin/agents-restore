@@ -169,22 +169,23 @@ def running_agents():
 
 
 def mark_running(sessions):
-    procs = running_agents()
-    # sessão mais recente de cada (agente, pasta): é a que o processo naquela pasta está usando
-    newest = {}
-    for s in sessions:
-        k = (s["agent"], s["cwd"])
-        if k not in newest or s["mtime"] > newest[k]["mtime"]:
-            newest[k] = s
+    """Marca como rodando: ids explícitos (--resume <id>) e, para processos sem id,
+    as N sessões mais recentes de cada (agente, pasta), N = processos ali."""
     for s in sessions:
         s["running"] = False
-    for agent, cwd, sid in procs:
+    counts = {}
+    for agent, cwd, sid in running_agents():
         if sid:
             for s in sessions:
                 if s["agent"] == agent and s["id"].startswith(sid):
                     s["running"] = True
-        elif cwd and (agent, cwd) in newest:
-            newest[(agent, cwd)]["running"] = True
+        elif cwd:
+            counts[(agent, cwd)] = counts.get((agent, cwd), 0) + 1
+    for (agent, cwd), n in counts.items():
+        candidates = [s for s in sessions if s["agent"] == agent and s["cwd"] == cwd and not s["running"]]
+        candidates.sort(key=lambda s: s["mtime"], reverse=True)
+        for s in candidates[:n]:
+            s["running"] = True
 
 
 def when_label(ts):
