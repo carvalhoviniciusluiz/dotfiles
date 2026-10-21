@@ -10,6 +10,8 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 # asdf: shims seguem a versão do .tool-versions (global ou do projeto)
 export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
+# ~/bin: scripts do repositório carvalhoviniciusluiz/dotfiles-bin
+# (helpers do iTerm + Claude Code; instalar com ./install.sh --with-bin)
 export PATH="$HOME/bin:$PATH"
 # Java (Temurin 21 via asdf) e Ghidra para o REA
 export JAVA_HOME="$HOME/.asdf/installs/java/temurin-21.0.12+101.0.LTS"

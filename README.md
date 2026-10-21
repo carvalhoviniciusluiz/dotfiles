@@ -13,8 +13,8 @@ cd ~/Development/dotfiles
 ./install.sh                    # pode rodar de novo quando quiser (idempotente)
 ```
 
-O repositório é privado: antes do `git clone`, entre no GitHub pelo navegador
-ou use `gh auth login` (se o `gh` ainda não existir, baixe o ZIP pelo site).
+O repositório é público: o `git clone` funciona sem login. O `install.sh` pede
+o `gh auth login` no fim, para os agentes poderem usar o GitHub.
 
 Opções:
 

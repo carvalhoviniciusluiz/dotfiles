@@ -30,7 +30,7 @@ via `~/.claude/CLAUDE.md`, pelo Claude Code). As regras de cada repositório
 
 ## Dotfiles (backup e reprodução desta máquina)
 
-- Repositório: `~/Development/dotfiles` (GitHub privado `carvalhoviniciusluiz/dotfiles`).
+- Repositório: `~/Development/dotfiles` (GitHub público `carvalhoviniciusluiz/dotfiles`; sem segredos).
   `install.sh` recria tudo num Mac Apple Silicon novo (`--list` mostra as etapas).
 - Os arquivos em `home/` estão **linkados** em `~` (ex.: `~/.zshrc`,
   `~/.config/starship.toml`, este `AGENTS.md`): editar o arquivo em `~` já edita
