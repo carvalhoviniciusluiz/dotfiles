@@ -1,0 +1,73 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# Prompt compacto em uma linha: pasta, Git, versões do projeto e cursor.
+# Símbolos Nerd Font: requer "FiraCode Nerd Font Mono" no iTerm.
+add_newline = false
+command_timeout = 800
+palette = "dracula"
+
+format = " $directory$git_branch$git_state$git_status$nodejs$python$java$rust$cmd_duration$character"
+
+[palettes.dracula]
+background = "#282a36"
+current_line = "#44475a"
+foreground = "#f8f8f2"
+comment = "#6272a4"
+cyan = "#8be9fd"
+green = "#50fa7b"
+orange = "#ffb86c"
+pink = "#ff79c6"
+purple = "#bd93f9"
+red = "#ff5555"
+yellow = "#f1fa8c"
+
+[directory]
+format = '[$path]($style)[$read_only]($read_only_style)'
+style = "bold purple"
+truncation_length = 4
+truncate_to_repo = true
+
+[git_branch]
+format = ' on [$symbol$branch(:$remote_branch)]($style)'
+symbol = " "
+style = "bold pink"
+
+[git_status]
+format = '( [\[$all_status$ahead_behind\]]($style))'
+style = "bold orange"
+
+[nodejs]
+format = ' via [$symbol($version)]($style)'
+symbol = " "
+style = "green"
+
+[python]
+format = ' via [${symbol}${version}( \($virtualenv\))]($style)'
+symbol = " "
+style = "yellow"
+
+[java]
+format = ' via [${symbol}(${version})]($style)'
+symbol = " "
+style = "red"
+
+[rust]
+format = ' via [$symbol($version)]($style)'
+symbol = " "
+style = "orange"
+
+[cmd_duration]
+min_time = 2_000
+format = ' levou [$duration]($style)'
+style = "comment"
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+
+# Cada módulo começa com espaço (e não termina), para o ❯ ficar colado: " ~/pasta❯"
+[git_state]
+format = ' \([$state( $progress_current/$progress_total)]($style)\)'
+
+[localip]
+disabled = true

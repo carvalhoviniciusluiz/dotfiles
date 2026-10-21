@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Notificação do macOS para hooks de agentes (Claude Code: Stop / Notification).
+# Uso: agent-notify <título> [mensagem]  — se o evento vier em JSON no stdin,
+# usa o campo "message" dele. Não notifica se o iTerm estiver em primeiro plano.
+set -u
+
+title="${1:-Agente}"
+message="${2:-Tarefa concluída}"
+
+if [[ ! -t 0 ]]; then
+  payload="$(cat)"
+  from_json="$(printf '%s' "$payload" | /usr/bin/python3 -I -c 'import json,sys
+try: print(json.load(sys.stdin).get("message",""))
+except Exception: pass' 2>/dev/null)"
+  [[ -n "$from_json" ]] && message="$from_json"
+  project="$(printf '%s' "$payload" | /usr/bin/python3 -I -c 'import json,os,sys
+try: print(os.path.basename(json.load(sys.stdin).get("cwd","")))
+except Exception: pass' 2>/dev/null)"
+  [[ -n "$project" ]] && title="$title · $project"
+fi
+
+front="$(/usr/bin/osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null)"
+[[ "$front" == "iTerm2" ]] && exit 0
+
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+/usr/bin/osascript -e "display notification \"$(esc "$message")\" with title \"$(esc "$title")\" sound name \"Glass\"" >/dev/null 2>&1
+exit 0

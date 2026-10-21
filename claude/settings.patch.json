@@ -1,0 +1,30 @@
+{
+  "theme": "dark",
+  "permissions": {
+    "ask": ["mcp__rea"]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{{HOME}}/.local/bin/agent-notify \"Claude Code\" \"Tarefa concluída\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{{HOME}}/.local/bin/agent-notify \"Claude Code\" \"Precisa da sua atenção\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

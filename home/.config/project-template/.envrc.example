@@ -1,0 +1,8 @@
+# Copie para .envrc (ignorado pelo Git) e rode `direnv allow`.
+# Variáveis aqui ficam disponíveis só dentro da pasta do projeto.
+
+# export DATABASE_URL="postgres://localhost:5432/{{PROJECT}}"
+# export API_KEY="..."
+
+# Carrega também um .env, se existir:
+# dotenv_if_exists

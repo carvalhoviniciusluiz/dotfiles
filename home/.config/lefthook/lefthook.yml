@@ -1,0 +1,46 @@
+# Modelo base de hooks Git (copiado por `lefthook-init`).
+# Docs: https://lefthook.dev
+# Pular uma vez (emergência): LEFTHOOK=0 git commit ...
+
+pre-commit:
+  parallel: true
+  jobs:
+    # Bloqueia o commit se houver segredos (tokens, senhas, chaves) nos arquivos staged.
+    - name: gitleaks
+      run: gitleaks git --staged --redact --no-banner --verbose
+
+    # Formata os arquivos staged e os adiciona de volta ao commit.
+    - name: prettier
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,json,jsonc,css,scss,html,md,mdx,yml,yaml}"
+      run: prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+
+    # Erros comuns em scripts shell.
+    - name: shellcheck
+      glob: "*.{sh,bash}"
+      run: shellcheck -x {staged_files}
+
+    # --- Lint por linguagem: descomente conforme o projeto ---
+
+    # JavaScript/TypeScript (ESLint instalado no projeto):
+    # - name: eslint
+    #   glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
+    #   run: pnpm exec eslint --fix {staged_files}
+    #   stage_fixed: true
+
+    # Python (ruff via uv):
+    # - name: ruff
+    #   glob: "*.py"
+    #   run: uv run ruff check --fix {staged_files} && uv run ruff format {staged_files}
+    #   stage_fixed: true
+
+    # TypeScript: checagem de tipos do projeto inteiro (mais lento):
+    # - name: typecheck
+    #   glob: "*.{ts,tsx}"
+    #   run: pnpm exec tsc --noEmit
+
+# Antes do push: roda os testes do projeto (descomente e ajuste o comando).
+# pre-push:
+#   jobs:
+#     - name: test
+#       run: pnpm test

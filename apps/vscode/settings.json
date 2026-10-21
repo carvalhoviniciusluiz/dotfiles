@@ -1,0 +1,7 @@
+{
+  "workbench.colorTheme": "Dracula Theme",
+  "editor.fontFamily": "'Fira Code', Menlo, Monaco, 'Courier New', monospace",
+  "editor.fontLigatures": true,
+  "terminal.integrated.fontFamily": "'Fira Code'",
+  "terminal.integrated.fontLigatures.enabled": true
+}

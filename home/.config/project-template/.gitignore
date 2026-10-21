@@ -1,0 +1,14 @@
+# Dependências e builds
+node_modules/
+dist/
+build/
+.venv/
+__pycache__/
+target/
+coverage/
+
+# Variáveis locais (o .gitignore global também cobre)
+.env
+.env.*
+!.env.example
+.envrc

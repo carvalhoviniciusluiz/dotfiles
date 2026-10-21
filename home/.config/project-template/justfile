@@ -1,0 +1,20 @@
+# Comandos do projeto. `just` lista as receitas; agentes devem usá-las.
+
+default:
+    @just --list
+
+# Ambiente de desenvolvimento
+dev:
+    @echo "configure a receita 'dev' no justfile"
+
+# Testes
+test:
+    @echo "configure a receita 'test' no justfile"
+
+# Lint
+lint:
+    @echo "configure a receita 'lint' no justfile"
+
+# Formatação
+fmt:
+    prettier --write --ignore-unknown .

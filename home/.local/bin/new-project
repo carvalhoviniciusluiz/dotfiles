@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Cria um projeto no padrão desta máquina: git (main), AGENTS.md + CLAUDE.md,
+# justfile, .editorconfig, .gitignore, .envrc.example e hooks do lefthook.
+# Uso: new-project <nome> [pasta-pai]   (padrão: ~/Development)
+set -euo pipefail
+
+usage() { echo "uso: new-project <nome> [pasta-pai]" >&2; exit 1; }
+[[ $# -ge 1 && -n "$1" && "$1" != -* ]] || usage
+
+name="$1"
+parent="${2:-$HOME/Development}"
+dir="$parent/$name"
+tpl="$HOME/.config/project-template"
+
+[[ -d "$tpl" ]] || { echo "new-project: modelo não encontrado em $tpl" >&2; exit 1; }
+[[ -e "$dir" ]] && { echo "new-project: $dir já existe" >&2; exit 1; }
+
+mkdir -p "$dir"
+cd "$dir"
+git init -q -b main
+
+for f in AGENTS.md justfile .editorconfig .envrc.example .gitignore; do
+  sed "s/{{PROJECT}}/$name/g" "$tpl/$f" > "$f"
+done
+ln -s AGENTS.md CLAUDE.md
+printf '# %s\n' "$name" > README.md
+
+lefthook-init >/dev/null
+
+git add -A
+LEFTHOOK=0 git commit -q -m "chore: bootstrap project"
+
+echo "new-project: criado em $dir"
+echo "  próximos passos: edite AGENTS.md e as receitas do justfile"

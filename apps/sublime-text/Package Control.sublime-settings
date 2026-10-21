@@ -1,0 +1,18 @@
+{
+	"installed_packages":
+	[
+		"A File Icon",
+		"Dracula Color Scheme",
+		"EditorConfig",
+		"JsPrettier",
+		"LSP",
+		"LSP-pyright",
+		"LSP-typescript",
+		"Package Control",
+		"SideBarEnhancements",
+		"Terminus",
+	],
+	"in_process_packages":
+	[
+	],
+}

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Copia o modelo de hooks (~/.config/lefthook/lefthook.yml) para o repositório
+# atual e instala os hooks. Uso: lefthook-init [--force]
+set -euo pipefail
+
+template="$HOME/.config/lefthook/lefthook.yml"
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "lefthook-init: não é um repositório Git" >&2
+  exit 1
+}
+target="$root/lefthook.yml"
+
+if [[ -e "$target" && "${1:-}" != "--force" ]]; then
+  echo "lefthook-init: $target já existe (use --force para sobrescrever)" >&2
+  exit 1
+fi
+
+cp "$template" "$target"
+(cd "$root" && lefthook install)
+echo "lefthook-init: hooks instalados em $root (edite lefthook.yml para ativar o lint do projeto)"

@@ -1,0 +1,29 @@
+# Ignorados em todos os repositórios desta máquina (core.excludesFile padrão do Git)
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Segredos e variáveis locais
+.env
+.env.*
+!.env.example
+!.env.sample
+.envrc
+!.envrc.example
+*.pem
+*.key
+
+# Editores
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.sublime-workspace
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
