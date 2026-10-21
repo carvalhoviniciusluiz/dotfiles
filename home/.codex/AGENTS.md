@@ -61,6 +61,32 @@ curta, código de saída 0 = ok. Rode `<comando> --help` para detalhes.
 Skills do usuário (Claude Code e Codex): `/commit`, `/pr` (só quando o usuário
 chamar; sempre pedem confirmação) e `/review-changes` (revisão das mudanças locais).
 
+### `agents-restore`: retomar agentes depois de um travamento
+
+Para quê: o Mac (ou o iTerm) às vezes trava e o usuário perde as abas com vários
+agentes trabalhando. As conversas ficam gravadas em disco (`~/.claude/projects`,
+`~/.codex/sessions`); `agents-restore` encontra as recentes e reabre cada uma
+numa aba do iTerm, na pasta certa, retomando de onde parou.
+
+Quando usar:
+
+- O usuário diz que o terminal/Mac travou, que perdeu as abas ou pergunta
+  "o que estava rodando?" / "quais agentes eu tinha abertos?" → rode
+  `agents-restore --list` (ou `--detail` para ver o último pedido de cada um) e
+  mostre a lista.
+- Para descobrir o id de uma sessão anterior (ex.: retomar ou citar uma
+  conversa): `agents-restore --list --full-id --hours 48`.
+
+Regras:
+
+- **Não reabra sessões por conta própria.** Reabrir inicia novos agentes
+  (memória, custo). Mostre a lista e só rode `agents-restore <números|ids>` ou
+  `--all` quando o usuário pedir. Na dúvida, use `--dry-run`.
+- Sessões marcadas `[rodando]` ainda estão abertas: não reabra (duplicaria o
+  agente na mesma conversa). Isso inclui a sua própria sessão.
+- Antes de reabrir várias, rode `sysload`; com memória sob pressão, sugira
+  reabrir só as prioritárias.
+
 ## Gerenciadores de pacotes
 
 - JavaScript/TypeScript: **pnpm** (a não ser que o projeto já use npm, yarn ou
