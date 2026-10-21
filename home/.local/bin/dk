@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# dk — liga e desliga o Docker Desktop sob demanda (ele não inicia com o sistema).
+#   dk up      abre o Docker e espera o daemon responder (até 120s)
+#   dk down    fecha o Docker Desktop e libera a memória
+#   dk status  saída 0 se o daemon responde
+set -uo pipefail
+
+ready() { docker info >/dev/null 2>&1; }
+
+case "${1:-status}" in
+  up)
+    if ready; then echo "dk: Docker já está pronto"; exit 0; fi
+    [[ -d /Applications/Docker.app ]] || { echo "dk: Docker Desktop não instalado" >&2; exit 1; }
+    open -g -a Docker
+    for i in $(seq 1 120); do
+      if ready; then echo "dk: Docker pronto (${i}s)"; exit 0; fi
+      sleep 1
+    done
+    echo "dk: o Docker não respondeu em 120s" >&2; exit 1 ;;
+  down)
+    if [[ -n "$(docker ps -q 2>/dev/null)" ]]; then
+      echo "dk: contêineres em execução serão encerrados:"; docker ps --format '  - {{.Names}} ({{.Image}})'
+    fi
+    osascript -e 'quit app "Docker"' >/dev/null 2>&1 || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1
+    for _ in $(seq 1 30); do ready || { echo "dk: Docker encerrado"; exit 0; }; sleep 1; done
+    echo "dk: o Docker ainda responde; feche pelo ícone da barra de menu" >&2; exit 1 ;;
+  status)
+    if ready; then echo "dk: rodando ($(docker ps -q | wc -l | tr -d ' ') contêiner(es))"; else echo "dk: parado (use: dk up)"; exit 1; fi ;;
+  -h|--help) sed -n '2,5p' "$0" ;;
+  *) echo "dk: use up | down | status" >&2; exit 1 ;;
+esac

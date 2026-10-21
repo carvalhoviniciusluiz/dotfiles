@@ -24,7 +24,7 @@ MACOS_TWEAKS=0
 ONLY=""
 
 STEPS=(preflight brew asdf links git npm uv binaries fonts zsh_plugins
-       apps sublime vscode iterm ghidra ai_memory claude codex github)
+       apps sublime vscode iterm ghidra ai_memory skills claude codex github)
 
 log()  { printf '\n\033[1;35m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
@@ -201,6 +201,13 @@ step_binaries() {
     "https://github.com/tldr-pages/tlrc/releases/download/v$TLRC_VERSION/tlrc-v$TLRC_VERSION-aarch64-apple-darwin.tar.gz" \
     "$TLRC_SHA256" tldr
   "$HOME/.local/bin/tldr" --update >/dev/null 2>&1 || true
+  install_bin atuin "$ATUIN_VERSION" \
+    "https://github.com/atuinsh/atuin/releases/download/v$ATUIN_VERSION/atuin-aarch64-apple-darwin.tar.gz" \
+    "$ATUIN_SHA256" atuin
+  # importa o histórico existente do zsh uma vez (sincronização fica desligada)
+  if [[ ! -f "$HOME/.atuin/data/history.db" ]]; then
+    "$HOME/.local/bin/atuin" import zsh >/dev/null 2>&1 || true
+  fi
 }
 
 step_fonts() {
@@ -300,6 +307,8 @@ step_iterm() {
   local dyn="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
   mkdir -p "$dyn"
   cp "$DOTFILES/apps/iterm2/Dotfiles.json" "$dyn/Dotfiles.json"
+  # janela que desce do topo com ⌃` (Control + crase), herdando o perfil Dotfiles
+  cp "$DOTFILES/apps/iterm2/Hotkey.json" "$dyn/Hotkey.json"
   open -g "$DOTFILES/apps/iterm2/Dracula.itermcolors" 2>/dev/null || true
   # pgrep não enxerga o iTerm em alguns contextos (sandbox); ps enxerga
   # shellcheck disable=SC2009
@@ -371,6 +380,19 @@ step_codex() {
   rea setup --skill-client codex --yes --json >/dev/null 2>&1 || warn "skill do REA: rode 'rea setup --skill-client codex --yes'"
   ok "MCPs: rea, playwright, context7 + notificações [tui]"
   warn "abra o Codex, rode /hooks e escolha 'Trust all' (hooks do ai-memory)"
+}
+
+step_skills() {
+  log "Skills dos agentes (/commit, /pr, /review-changes) no Claude Code e no Codex"
+  local skill name
+  for skill in "$DOTFILES"/skills/*/; do
+    name="$(basename "$skill")"
+    for dir in "$HOME/.claude/skills" "$HOME/.agents/skills"; do
+      mkdir -p "$dir"
+      ln -sfn "${skill%/}" "$dir/$name"
+    done
+    ok "$name"
+  done
 }
 
 step_github() {

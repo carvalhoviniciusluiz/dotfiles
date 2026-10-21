@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# bgrun — roda processos longos (dev servers, watchers) em segundo plano com
+# log em arquivo, para agentes não travarem nem esquecerem processos rodando.
+#
+#   bgrun start <nome> [--wait-port N] [--wait-text TEXTO] [--timeout S] -- <comando...>
+#   bgrun logs  <nome> [-n LINHAS] [-f]
+#   bgrun stop  <nome>          bgrun stop-all
+#   bgrun status <nome>         (saída 0 se rodando)
+#   bgrun list [--quiet]
+#
+# Estado em ~/.local/state/bgrun/<nome>.{pid,log,cmd,cwd}. Ao terminar o
+# trabalho, pare o que iniciou (a máquina tem 8 GB de RAM).
+set -uo pipefail
+
+state="${BGRUN_DIR:-$HOME/.local/state/bgrun}"
+mkdir -p "$state"
+
+die() { echo "bgrun: $*" >&2; exit 1; }
+valid_name() { [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || die "nome inválido: '$1' (use letras, números, . _ -)"; }
+pidof_name() { [[ -f "$state/$1.pid" ]] && cat "$state/$1.pid"; }
+alive() { local p; p="$(pidof_name "$1")"; [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null; }
+
+port_open() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+
+cmd_start() {
+  local name="${1:-}"; shift || true
+  [[ -n "$name" ]] || die "uso: bgrun start <nome> [--wait-port N] [--wait-text T] -- <comando...>"
+  valid_name "$name"
+  local wait_port="" wait_text="" timeout=60
+  while [[ $# -gt 0 && "$1" != "--" ]]; do
+    case "$1" in
+      --wait-port) wait_port="$2"; shift 2 ;;
+      --wait-text) wait_text="$2"; shift 2 ;;
+      --timeout) timeout="$2"; shift 2 ;;
+      *) die "opção desconhecida: $1" ;;
+    esac
+  done
+  [[ "${1:-}" == "--" ]] && shift
+  [[ $# -gt 0 ]] || die "faltou o comando depois de --"
+  alive "$name" && die "'$name' já está rodando (pid $(pidof_name "$name")); use: bgrun stop $name"
+  [[ -n "$wait_port" ]] && port_open "$wait_port" && die "a porta $wait_port já está em uso (veja: ports $wait_port)"
+
+  local log="$state/$name.log"
+  : > "$log"
+  printf '%q ' "$@" > "$state/$name.cmd"
+  pwd > "$state/$name.cwd"
+  # job control: o processo vira líder do próprio grupo, para o stop matar os filhos
+  set -m
+  nohup "$@" >>"$log" 2>&1 < /dev/null &
+  local pid=$!
+  set +m
+  echo "$pid" > "$state/$name.pid"
+  date +%s > "$state/$name.started"
+
+  if [[ -n "$wait_port" || -n "$wait_text" ]]; then
+    local t=0
+    while (( t < timeout )); do
+      if ! kill -0 "$pid" 2>/dev/null; then
+        echo "bgrun: '$name' terminou antes de ficar pronto. Últimas linhas:" >&2
+        tail -n 30 "$log" >&2
+        rm -f "$state/$name.pid"
+        exit 1
+      fi
+      if [[ -n "$wait_port" ]] && port_open "$wait_port"; then break; fi
+      if [[ -n "$wait_text" ]] && grep -qF "$wait_text" "$log"; then break; fi
+      sleep 1; t=$((t + 1))
+    done
+    if (( t >= timeout )); then
+      echo "bgrun: '$name' não ficou pronto em ${timeout}s (continua rodando). Últimas linhas:" >&2
+      tail -n 20 "$log" >&2
+      exit 1
+    fi
+    echo "bgrun: '$name' pronto (pid $pid, ${t}s). Log: bgrun logs $name"
+  else
+    sleep 1
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "bgrun: '$name' terminou logo ao iniciar. Últimas linhas:" >&2
+      tail -n 30 "$log" >&2
+      rm -f "$state/$name.pid"
+      exit 1
+    fi
+    echo "bgrun: '$name' iniciado (pid $pid). Log: bgrun logs $name"
+  fi
+}
+
+cmd_stop() {
+  local name="${1:-}"; [[ -n "$name" ]] || die "uso: bgrun stop <nome>"
+  valid_name "$name"
+  local pid; pid="$(pidof_name "$name")"
+  if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+    rm -f "$state/$name.pid"; echo "bgrun: '$name' não está rodando"; return 0
+  fi
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null
+  fi
+  rm -f "$state/$name.pid"
+  echo "bgrun: '$name' parado"
+}
+
+cmd_list() {
+  local quiet=0; [[ "${1:-}" == "--quiet" ]] && quiet=1
+  local any=0 f name pid started up
+  for f in "$state"/*.cmd; do
+    [[ -e "$f" ]] || continue
+    name="$(basename "$f" .cmd)"
+    if alive "$name"; then
+      pid="$(pidof_name "$name")"
+      started="$(cat "$state/$name.started" 2>/dev/null || echo 0)"
+      up=$(( $(date +%s) - started ))
+      printf -- '- %s: rodando (pid %s, há %dmin) em %s — %s\n' "$name" "$pid" $((up / 60)) "$(cat "$state/$name.cwd")" "$(cat "$f")"
+      any=1
+    elif (( ! quiet )); then
+      printf -- '- %s: parado — %s\n' "$name" "$(cat "$f")"
+      any=1
+    fi
+  done
+  (( any || quiet )) || echo "bgrun: nenhum processo registrado"
+}
+
+sub="${1:-}"; shift || true
+case "$sub" in
+  start) cmd_start "$@" ;;
+  stop) cmd_stop "$@" ;;
+  stop-all)
+    for f in "$state"/*.pid; do [[ -e "$f" ]] && cmd_stop "$(basename "$f" .pid)"; done; true ;;
+  logs)
+    name="${1:-}"; [[ -n "$name" ]] || die "uso: bgrun logs <nome> [-n LINHAS] [-f]"; shift
+    valid_name "$name"; [[ -f "$state/$name.log" ]] || die "sem log para '$name'"
+    n=50 follow=0
+    while [[ $# -gt 0 ]]; do case "$1" in -n) n="$2"; shift 2 ;; -f) follow=1; shift ;; *) die "opção: $1" ;; esac; done
+    if (( follow )); then tail -n "$n" -f "$state/$name.log"; else tail -n "$n" "$state/$name.log"; fi ;;
+  status)
+    name="${1:-}"; [[ -n "$name" ]] || die "uso: bgrun status <nome>"; valid_name "$name"
+    if alive "$name"; then echo "rodando (pid $(pidof_name "$name"))"; else echo "parado"; exit 1; fi ;;
+  list) cmd_list "$@" ;;
+  ""|-h|--help) sed -n '2,13p' "$0" ;;
+  *) die "subcomando desconhecido: $sub (use --help)" ;;
+esac

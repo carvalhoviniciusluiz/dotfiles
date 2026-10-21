@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# check — valida o projeto: lint, tipos e testes, detectando as ferramentas.
+# Mostra só o resumo e, para o que falhar, as últimas linhas de saída.
+# Uso: check [--fast] [--only lint|types|test] [--lines N]
+#   --fast   pula os testes
+# Se o justfile tiver a receita `check`, ela é usada no lugar da detecção.
+# Saída: 0 se tudo passou, 1 se algo falhou, 2 se não há nada para validar.
+set -uo pipefail
+
+fast=0 only="" lines=40
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --fast) fast=1; shift ;;
+    --only) only="$2"; shift 2 ;;
+    --lines) lines="$2"; shift 2 ;;
+    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
+    *) echo "check: opção desconhecida: $1" >&2; exit 2 ;;
+  esac
+done
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$root" || exit 2
+
+has() { command -v "$1" >/dev/null 2>&1; }
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+names=() kinds=() cmds=()
+add() { names+=("$1"); kinds+=("$2"); cmds+=("$3"); }
+
+if [[ -f justfile || -f Justfile ]] && has just && just --summary 2>/dev/null | tr ' ' '\n' | grep -qx check; then
+  add "just check" all "just check"
+else
+  if [[ -f package.json ]] && ! jq -e . package.json >/dev/null 2>&1; then
+    echo "✗ package.json inválido (JSON com erro de sintaxe):"
+    jq . package.json 2>&1 | head -3 | sed 's/^/    /'
+    echo "RESULTADO: falhou"
+    exit 1
+  fi
+  if [[ -f package.json ]]; then
+    pm="npm"
+    [[ -f pnpm-lock.yaml ]] && pm="pnpm"
+    [[ -f yarn.lock ]] && pm="yarn"
+    [[ -f bun.lockb || -f bun.lock ]] && pm="bun"
+    script() { jq -e --arg s "$1" '.scripts[$s] // empty' package.json >/dev/null 2>&1; }
+    run="$pm run"
+    script lint && add "lint ($pm)" lint "$run lint"
+    if script typecheck; then add "typecheck ($pm)" types "$run typecheck"
+    elif script type-check; then add "type-check ($pm)" types "$run type-check"
+    elif [[ -f tsconfig.json ]]; then add "tsc --noEmit" types "$pm exec tsc --noEmit"
+    fi
+    script test && add "test ($pm)" test "$run test"
+  fi
+  if [[ -f pyproject.toml ]]; then
+    if grep -q 'ruff' pyproject.toml 2>/dev/null; then add "ruff" lint "uv run ruff check ."; fi
+    if grep -q 'mypy' pyproject.toml 2>/dev/null; then add "mypy" types "uv run mypy ."; fi
+    if grep -qE 'pytest' pyproject.toml 2>/dev/null || [[ -d tests ]]; then add "pytest" test "uv run pytest -q"; fi
+  fi
+  if [[ -f Cargo.toml ]]; then
+    add "cargo clippy" lint "cargo clippy --all-targets -q -- -D warnings"
+    add "cargo test" test "cargo test -q"
+  fi
+  if [[ -f go.mod ]]; then
+    add "go vet" lint "go vet ./..."
+    add "go test" test "go test ./..."
+  fi
+  shell_files="$(git ls-files '*.sh' 2>/dev/null)"
+  if [[ -n "$shell_files" ]] && has shellcheck; then
+    add "shellcheck" lint "git ls-files -z '*.sh' | xargs -0 shellcheck -x"
+  fi
+fi
+
+if ((${#cmds[@]} == 0)); then
+  echo "check: nada para validar em $root (sem package.json, pyproject, Cargo, go.mod ou receita 'just check')"
+  exit 2
+fi
+
+fail=0 ran=0
+for i in "${!cmds[@]}"; do
+  kind="${kinds[$i]}"
+  [[ -n "$only" && "$kind" != "$only" && "$kind" != all ]] && continue
+  [[ "$fast" == 1 && "$kind" == test ]] && { echo "- ${names[$i]}: pulado (--fast)"; continue; }
+  ran=$((ran + 1))
+  t0=$SECONDS
+  if bash -c "${cmds[$i]}" >"$tmp/out" 2>&1; then
+    echo "✓ ${names[$i]} ($((SECONDS - t0))s)"
+  else
+    fail=1
+    echo "✗ ${names[$i]} ($((SECONDS - t0))s) — comando: ${cmds[$i]}"
+    tail -n "$lines" "$tmp/out" | sed 's/^/    /'
+  fi
+done
+
+((ran == 0)) && { echo "check: nenhuma etapa corresponde a --only $only"; exit 2; }
+if ((fail)); then echo "RESULTADO: falhou"; exit 1; fi
+echo "RESULTADO: ok"

@@ -49,18 +49,18 @@ Arquivos que já existiam são movidos para `~/.dotfiles-backup/<data>/`.
 
 ## O que é instalado
 
-| Camada                                          | Itens                                                                                                                                                            |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Homebrew (mínimo)                               | `asdf`, `git`, `xz`, `zstd` — `Brewfile`                                                                                                                         |
-| asdf (`tool-versions`)                          | Node 26, Python 3.14, Java Temurin 21, Rust, Lua, gh, ripgrep, fd, jq, uv, direnv, lefthook, gitleaks, shellcheck, delta, lazygit, just, fzf, starship, eza, bat |
-| npm global                                      | pnpm, prettier, Codex CLI, ast-grep, rea-agents                                                                                                                  |
-| uv tool                                         | Spec Kit (`specify`)                                                                                                                                             |
-| Binários oficiais (`~/.local/opt`, com SHA-256) | watchexec, zoxide, tldr (tlrc), Ghidra 12.1.4 (+ natives mac_arm_64)                                                                                             |
-| Fontes                                          | Fira Code, FiraCode Nerd Font Mono                                                                                                                               |
-| Apps                                            | Sublime Text 4, Sublime Merge (assinatura verificada)                                                                                                            |
-| Agentes                                         | Claude Code + Codex: MCPs ai-memory, rea, playwright, context7; notificações; `AGENTS.md` global com inventário                                                  |
-| zsh                                             | autosuggestions, syntax-highlighting, histórico 50k, fzf, zoxide, starship, aliases                                                                              |
-| Scripts (`~/.local/bin`)                        | `new-project`, `lefthook-init`, `agent-notify`                                                                                                                   |
+| Camada                                          | Itens                                                                                                                                                                                    |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Homebrew (mínimo)                               | `asdf`, `git`, `xz`, `zstd` — `Brewfile`                                                                                                                                                 |
+| asdf (`tool-versions`)                          | Node 26, Python 3.14, Java Temurin 21, Rust, Lua, gh, ripgrep, fd, jq, uv, direnv, lefthook, gitleaks, shellcheck, delta, lazygit, just, fzf, starship, eza, bat, xh, dust, bottom (btm) |
+| npm global                                      | pnpm, prettier, Codex CLI, ast-grep, ccusage, rea-agents                                                                                                                                 |
+| uv tool                                         | Spec Kit (`specify`)                                                                                                                                                                     |
+| Binários oficiais (`~/.local/opt`, com SHA-256) | watchexec, zoxide, tldr (tlrc), atuin, Ghidra 12.1.4 (+ natives mac_arm_64)                                                                                                              |
+| Fontes                                          | Fira Code, FiraCode Nerd Font Mono                                                                                                                                                       |
+| Apps                                            | Sublime Text 4, Sublime Merge (assinatura verificada)                                                                                                                                    |
+| Agentes                                         | Claude Code + Codex: skills /commit /pr /review-changes, MCPs ai-memory, rea, playwright, context7; notificações; `AGENTS.md` global com inventário                                      |
+| zsh                                             | autosuggestions, syntax-highlighting, histórico 50k, fzf, zoxide, starship, aliases                                                                                                      |
+| Scripts (`~/.local/bin`)                        | `new-project`, `lefthook-init`, `agent-notify` + comandos para agentes: `ctx`, `check`, `bgrun`, `ports`, `dk`, `wt`, `ci-logs`, `sysload`                                               |
 
 Versões e checksums ficam em `versions.env`; atualize os dois juntos.
 
@@ -68,6 +68,8 @@ Versões e checksums ficam em `versions.env`; atualize os dois juntos.
 
 ```
 home/            espelho de ~ (linkado: editar em ~ edita aqui)
+skills/          /commit, /pr, /review-changes (linkados no Claude Code e no Codex)
+docs/            ai-memory entre máquinas
 apps/            iTerm2 (perfil dinâmico + Dracula), VS Code, Sublime Text/Merge
 claude/          patch de ~/.claude/settings.json (permissões e hooks)
 codex/           ajuste de ~/.codex/config.toml (notificações)

@@ -1,6 +1,8 @@
 bat https://github.com/pauloedurezende/asdf-bat.git
+bottom https://github.com/carbonteq/asdf-btm.git
 delta https://github.com/andweeb/asdf-delta.git
 direnv https://github.com/asdf-community/asdf-direnv.git
+dust https://github.com/looztra/asdf-dust.git
 eza https://github.com/lwiechec/asdf-eza.git
 fd https://gitlab.com/wt0f/asdf-fd.git
 fzf https://github.com/kompiro/asdf-fzf.git
@@ -19,3 +21,4 @@ rust https://github.com/asdf-community/asdf-rust.git
 shellcheck https://github.com/luizm/asdf-shellcheck.git
 starship https://github.com/gr1m0h/asdf-starship.git
 uv https://github.com/asdf-community/asdf-uv.git
+xh https://github.com/NeoHsu/asdf-xh

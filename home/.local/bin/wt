@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# wt — worktrees do Git para trabalhar em paralelo (ex.: dois agentes no mesmo
+# projeto, cada um na sua cópia e branch).
+#   wt new <branch> [--from <base>] [--env]   cria ../<repo>.worktrees/<branch>
+#                                              --env copia .env* e .envrc (ignorados pelo Git)
+#   wt list                                   lista worktrees
+#   wt path <branch>                          imprime a pasta da worktree
+#   wt rm <branch> [--force]                  remove (recusa se houver mudanças)
+set -uo pipefail
+
+die() { echo "wt: $*" >&2; exit 1; }
+main_root="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || die "não é um repositório Git"
+main_root="$(dirname "$main_root")"
+repo="$(basename "$main_root")"
+base_dir="$(dirname "$main_root")/$repo.worktrees"
+
+path_for() { printf '%s/%s' "$base_dir" "${1//\//-}"; }
+
+case "${1:-}" in
+  new)
+    branch="${2:-}"; [[ -n "$branch" ]] || die "uso: wt new <branch> [--from <base>] [--env]"
+    shift 2
+    from="" copy_env=0
+    while [[ $# -gt 0 ]]; do
+      case "$1" in --from) from="$2"; shift 2 ;; --env) copy_env=1; shift ;; *) die "opção: $1" ;; esac
+    done
+    dest="$(path_for "$branch")"
+    [[ -e "$dest" ]] && die "já existe: $dest"
+    mkdir -p "$base_dir"
+    if git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch"; then
+      git -C "$main_root" worktree add "$dest" "$branch" || exit 1
+    else
+      git -C "$main_root" worktree add -b "$branch" "$dest" ${from:+"$from"} || exit 1
+    fi
+    if (( copy_env )); then
+      for f in "$main_root"/.env "$main_root"/.env.* "$main_root"/.envrc; do
+        [[ -f "$f" ]] && cp "$f" "$dest/" && echo "wt: copiado $(basename "$f")"
+      done
+    fi
+    echo "wt: worktree pronta em $dest (branch $branch)"
+    if [[ -f "$dest/package.json" ]]; then echo "wt: instale as dependências lá (ex.: pnpm install)"; fi
+    if [[ -f "$dest/pyproject.toml" ]]; then echo "wt: instale as dependências lá (ex.: uv sync)"; fi ;;
+  list)
+    git -C "$main_root" worktree list ;;
+  path)
+    branch="${2:-}"; [[ -n "$branch" ]] || die "uso: wt path <branch>"
+    dest="$(path_for "$branch")"; [[ -d "$dest" ]] || die "não existe: $dest"
+    echo "$dest" ;;
+  rm)
+    branch="${2:-}"; [[ -n "$branch" ]] || die "uso: wt rm <branch> [--force]"
+    dest="$(path_for "$branch")"; [[ -d "$dest" ]] || die "não existe: $dest"
+    if [[ "${3:-}" != "--force" && -n "$(git -C "$dest" status --porcelain)" ]]; then
+      git -C "$dest" status --short
+      die "há mudanças não commitadas; commite ou use --force"
+    fi
+    git -C "$main_root" worktree remove ${3:+--force} "$dest" && echo "wt: removida $dest (a branch $branch continua existindo)" ;;
+  ""|-h|--help) sed -n '2,9p' "$0" ;;
+  *) die "subcomando desconhecido: $1 (use --help)" ;;
+esac

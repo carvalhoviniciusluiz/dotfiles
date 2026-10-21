@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ci-logs — mostra o que falhou na última execução do GitHub Actions da branch.
+#   ci-logs                 última execução da branch atual
+#   ci-logs <run-id>        uma execução específica
+#   ci-logs --lines N       linhas de log por job com falha (padrão 120)
+set -uo pipefail
+
+lines=120 run=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --lines) lines="$2"; shift 2 ;;
+    -h|--help) sed -n '2,5p' "$0"; exit 0 ;;
+    *) run="$1"; shift ;;
+  esac
+done
+
+command -v gh >/dev/null || { echo "ci-logs: gh não encontrado" >&2; exit 1; }
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || { echo "ci-logs: não é um repositório Git" >&2; exit 1; }
+
+if [[ -z "$run" ]]; then
+  info="$(gh run list --branch "$branch" --limit 1 --json databaseId,status,conclusion,workflowName,displayTitle,url,headSha,createdAt \
+          --jq '.[0] // empty | [.databaseId, .status, (.conclusion // "-"), .workflowName, .displayTitle, .url, .headSha[0:7], .createdAt] | @tsv' 2>&1)" \
+    || { echo "ci-logs: $info" >&2; exit 1; }
+  [[ -n "$info" ]] || { echo "ci-logs: nenhuma execução de CI para a branch $branch"; exit 0; }
+  IFS=$'\t' read -r run status conclusion workflow title url sha created <<< "$info"
+  echo "Workflow: $workflow — \"$title\" ($sha, $created)"
+  echo "Status: $status / $conclusion — $url"
+  if [[ "$status" != "completed" ]]; then echo "ci-logs: ainda em execução (gh run watch $run)"; exit 0; fi
+  if [[ "$conclusion" == "success" ]]; then echo "ci-logs: passou"; exit 0; fi
+fi
+
+echo
+echo "Jobs com falha:"
+gh run view "$run" --json jobs --jq '.jobs[] | select(.conclusion=="failure") | "- \(.name) — passo: \([.steps[] | select(.conclusion=="failure") | .name] | join(", "))"'
+echo
+echo "Log das falhas (últimas $lines linhas por job):"
+gh run view "$run" --log-failed 2>/dev/null \
+  | sed -E 's/^([^\t]*)\t([^\t]*)\t[0-9T:.-]+Z /\1 | /' \
+  | awk -v n="$lines" -F' \\| ' '{ job=$1; buf[job, ++c[job]] = $0; if (!(job in seen)) { seen[job]=1; order[++k]=job } }
+      END { for (j=1; j<=k; j++) { job=order[j]; s = c[job] > n ? c[job]-n+1 : 1; print "### " job; for (i=s; i<=c[job]; i++) print buf[job, i]; print "" } }'
+exit 1

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# ports — mostra quem está escutando em cada porta TCP e libera portas.
+#   ports              lista portas em uso (seus processos)
+#   ports <porta>      mostra o processo da porta
+#   ports free <porta> encerra o processo da porta (TERM, depois KILL)
+# Só encerra processos do seu usuário; nunca do sistema.
+set -uo pipefail
+
+me="$(id -un)"
+
+listen() {
+  lsof -nP -iTCP -sTCP:LISTEN -F pcuLn 2>/dev/null | awk '
+    /^p/ { pid = substr($0, 2) } /^c/ { cmd = substr($0, 2) } /^L/ { user = substr($0, 2) }
+    /^n/ { n = substr($0, 2); sub(/.*:/, "", n); key = n "|" pid
+           if (!(key in seen)) { seen[key] = 1; print n "\t" pid "\t" user "\t" cmd } }' | sort -n -u
+}
+
+describe() {
+  local pid="$1"
+  printf '%s' "$(ps -o command= -p "$pid" 2>/dev/null | cut -c1-90)"
+}
+
+case "${1:-}" in
+  ""|list)
+    printf '%-6s %-7s %-10s %s\n' PORTA PID USUÁRIO COMANDO
+    listen | while IFS=$'\t' read -r port pid user _; do
+      printf '%-6s %-7s %-10s %s\n' "$port" "$pid" "$user" "$(describe "$pid")"
+    done ;;
+  free)
+    port="${2:-}"; [[ "$port" =~ ^[0-9]+$ ]] || { echo "uso: ports free <porta>" >&2; exit 1; }
+    pids="$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u)"
+    [[ -n "$pids" ]] || { echo "ports: nada escutando na porta $port"; exit 0; }
+    for pid in $pids; do
+      owner="$(ps -o user= -p "$pid" | tr -d ' ')"
+      if [[ "$owner" != "$me" ]]; then
+        echo "ports: pid $pid pertence a '$owner'; não vou encerrar" >&2; exit 1
+      fi
+      echo "ports: encerrando pid $pid — $(describe "$pid")"
+      kill -TERM "$pid" 2>/dev/null
+      for _ in 1 2 3 4 5 6; do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+      kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null
+    done
+    if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then echo "ports: a porta $port continua ocupada" >&2; exit 1; fi
+    echo "ports: porta $port livre" ;;
+  -h|--help) sed -n '2,6p' "$0" ;;
+  *)
+    port="$1"; [[ "$port" =~ ^[0-9]+$ ]] || { echo "ports: porta inválida: $port" >&2; exit 1; }
+    found="$(listen | awk -F'\t' -v p="$port" '$1 == p')"
+    [[ -n "$found" ]] || { echo "ports: porta $port livre"; exit 1; }
+    echo "$found" | while IFS=$'\t' read -r p pid user _; do
+      echo "porta $p: pid $pid ($user) — $(describe "$pid")"
+    done ;;
+esac

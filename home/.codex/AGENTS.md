@@ -40,6 +40,26 @@ via `~/.claude/CLAUDE.md`, pelo Claude Code). As regras de cada repositório
   `asdf-plugins.txt`, passos no `install.sh`. Não commite nem faça push sem
   pedido do usuário; rode `gitleaks git --staged` antes.
 
+## Comandos para agentes (use-os)
+
+Scripts em `~/.local/bin` feitos para agentes: sem perguntas interativas, saída
+curta, código de saída 0 = ok. Rode `<comando> --help` para detalhes.
+
+| Situação                        | Comando                                                                                                                                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Começar a trabalhar num projeto | `ctx` — stack, gerenciador de pacotes, comandos (justfile/scripts), versões, regras (AGENTS.md), CI, estado do Git. **Rode antes de explorar arquivos.**                                        |
+| Validar mudanças                | `check` (lint + tipos + testes, detectados ou `just check`); `check --fast` pula testes; `--only lint\|types\|test`. **Rode antes de dizer que terminou.**                                      |
+| Subir servidor/watcher          | `bgrun start <nome> --wait-port <porta> -- <comando>` (nunca rode servidores em primeiro plano). `bgrun logs <nome>`, `bgrun list`. **Ao terminar: `bgrun stop <nome>`** (ou `bgrun stop-all`). |
+| "Porta em uso"                  | `ports <porta>` mostra quem usa; `ports free <porta>` encerra (só processos do usuário).                                                                                                        |
+| Precisa de Docker               | `dk up` (abre e espera ficar pronto); `dk down` ao terminar; `dk status`. O Docker **não** sobe sozinho.                                                                                        |
+| Trabalho paralelo/isolado       | `wt new <branch> [--from base] [--env]` cria `../<repo>.worktrees/<branch>`; `wt list`; `wt rm <branch>`.                                                                                       |
+| CI falhou                       | `ci-logs` (última execução da branch: jobs e trecho do log que falhou).                                                                                                                         |
+| Antes de iniciar algo pesado    | `sysload` (memória livre, swap, maiores consumidores); saída 1 = memória sob pressão → não inicie mais nada.                                                                                    |
+| Avisar o usuário                | `agent-notify "<título>" "<mensagem>"` (notificação do macOS).                                                                                                                                  |
+
+Skills do usuário (Claude Code e Codex): `/commit`, `/pr` (só quando o usuário
+chamar; sempre pedem confirmação) e `/review-changes` (revisão das mudanças locais).
+
 ## Gerenciadores de pacotes
 
 - JavaScript/TypeScript: **pnpm** (a não ser que o projeto já use npm, yarn ou
@@ -55,7 +75,7 @@ Use esta seção para responder "o que temos para X?" sem vasculhar o sistema.
 
 | Linguagem | Versão          | Observação                                                                                                                                                                                                                                                            |
 | --------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node.js   | 26.12.0         | globais npm: pnpm, prettier, rea-agents, @openai/codex, @ast-grep/cli                                                                                                                                                                                                 |
+| Node.js   | 26.12.0         | globais npm: pnpm, prettier, rea-agents, @openai/codex, @ast-grep/cli, ccusage                                                                                                                                                                                        |
 | Python    | 3.14.8          | compilado com xz/zstd do brew (`lzma`, `compression.zstd` ok; sem `tkinter`). Para reinstalar: `CPPFLAGS="-I/opt/homebrew/opt/xz/include -I/opt/homebrew/opt/zstd/include" LDFLAGS="-L/opt/homebrew/opt/xz/lib -L/opt/homebrew/opt/zstd/lib" asdf install python <v>` |
 | Java      | Temurin 21.0.12 | `JAVA_HOME` no `~/.zshrc`                                                                                                                                                                                                                                             |
 | Rust      | 1.99.1          |                                                                                                                                                                                                                                                                       |
@@ -88,6 +108,11 @@ Use esta seção para responder "o que temos para X?" sem vasculhar o sistema.
 | Exemplos práticos de comandos        | `tldr <comando>` (tlrc; páginas em português)                                                                                                               | binário, `~/.local/opt` |
 | Criar projeto no padrão              | `new-project <nome> [pasta]` (git main, AGENTS.md + CLAUDE.md, justfile, lefthook, .editorconfig, .envrc.example; modelos em `~/.config/project-template/`) | `~/.local/bin`          |
 | Notificação do macOS                 | `agent-notify <título> [msg]` (usado pelos hooks Stop/Notification do Claude Code)                                                                          | `~/.local/bin`          |
+| Testar APIs HTTP                     | `xh` (ex.: `xh :3000/api/users`, `xh POST :3000/login email=a@b.c`)                                                                                         | asdf                    |
+| Espaço em disco por pasta            | `dust [pasta]`                                                                                                                                              | asdf                    |
+| Monitor de processos/memória         | `btm` (bottom; interativo, para o usuário) — agentes usem `sysload`                                                                                         | asdf                    |
+| Histórico de comandos                | `atuin` (Ctrl+R; SQLite em `~/.atuin`; sincronização desligada)                                                                                             | binário, `~/.local/opt` |
+| Custo de uso do Claude Code          | `ccusage daily` / `ccusage monthly`                                                                                                                         | npm                     |
 | Git                                  | 2.56 do brew (`/opt/homebrew/bin/git`); 2.39 do Xcode em `/usr/bin/git`                                                                                     | brew                    |
 
 Em shells de agentes (sem TTY ou com `CLAUDECODE`), `ls` e `cat` são os
@@ -104,13 +129,13 @@ originais do sistema; os aliases `eza`/`bat` só valem no terminal do usuário.
 
 ### Apps e editores
 
-| App            | CLI      | Observação                                                                                                                                                    |
-| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| iTerm2         | —        | Dracula, FiraCode Nerd Font Mono, "Edição de texto natural" (⌥⌫ apaga palavra); sem integração de shell (o usuário não quer a barra de comando nem as marcas) |
-| VS Code        | `code`   | Dracula, Fira Code                                                                                                                                            |
-| Sublime Text 4 | `subl`   | Dracula, Fira Code, LSP (TS/Python), Terminus, JsPrettier                                                                                                     |
-| Sublime Merge  | `smerge` | cliente Git gráfico                                                                                                                                           |
-| Docker Desktop | `docker` | **não inicia com o sistema**; abrir com `open -a Docker` quando precisar e fechar ao terminar                                                                 |
+| App            | CLI      | Observação                                                                                                                                                                                           |
+| -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iTerm2         | —        | Dracula, FiraCode Nerd Font Mono, "Edição de texto natural" (⌥⌫ apaga palavra); janela Hotkey com ⌃\` (perfil Hotkey); sem integração de shell (o usuário não quer a barra de comando nem as marcas) |
+| VS Code        | `code`   | Dracula, Fira Code                                                                                                                                                                                   |
+| Sublime Text 4 | `subl`   | Dracula, Fira Code, LSP (TS/Python), Terminus, JsPrettier                                                                                                                                            |
+| Sublime Merge  | `smerge` | cliente Git gráfico                                                                                                                                                                                  |
+| Docker Desktop | `docker` | **não inicia com o sistema**; use `dk up` / `dk down`                                                                                                                                                |
 
 Serviços desligados no login (desempenho, `macos/tweaks.sh`): agente do Teams,
 Microsoft AutoUpdate, DockerHelper. Spotlight ignora `~/.asdf` e `~/.local`.
@@ -122,7 +147,7 @@ Microsoft AutoUpdate, DockerHelper. Spotlight ignora `~/.asdf` e `~/.local`.
   Tab com menu e sem diferenciar maiúsculas, histórico de 50.000 comandos.
 - Plugins em `~/.local/share/zsh/plugins/`.
 - Prompt starship em uma linha (` ~/pasta on  main❯`), símbolos Nerd Font.
-- fzf (Ctrl+R/Ctrl+T), zoxide (`z`, `zi`), aliases Git (`gs`, `gl`, `gd`,
+- atuin (Ctrl+R), fzf (Ctrl+T), zoxide (`z`, `zi`), aliases Git (`gs`, `gl`, `gd`,
   `gds`, `gco`, `gsw`, `gp`, `lg`) e navegação (`..`, `...`, `dev`).
 
 ## Git e segurança

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# sysload — situação da máquina em poucas linhas, para decidir se dá para
+# iniciar mais processos (8 GB de RAM). Saída 0 = ok, 1 = memória sob pressão.
+set -uo pipefail
+
+page=$(sysctl -n hw.pagesize)
+total_gb=$(awk -v b="$(sysctl -n hw.memsize)" 'BEGIN { printf "%.0f", b/1073741824 }')
+free_pct=$(memory_pressure 2>/dev/null | awk -F': ' '/free percentage/ { gsub("%", "", $2); print $2 }')
+compressed=$(vm_stat | awk -v p="$page" '/occupied by compressor/ { gsub("\\.", "", $NF); printf "%.1f", $NF*p/1073741824 }')
+swap=$(sysctl -n vm.swapusage | awk '{ for (i=1;i<=NF;i++) if ($i=="used") print $(i+2) }')
+load=$(sysctl -n vm.loadavg | awk '{ print $2, $3, $4 }')
+cpus=$(sysctl -n hw.ncpu)
+
+echo "Memória: ${free_pct:-?}% livre de ${total_gb} GB | comprimida ${compressed} GB | swap ${swap}"
+echo "Carga (1/5/15 min): $load em $cpus núcleos"
+echo "Maiores consumidores:"
+ps -Ao rss=,comm= | awk '{
+    rss=$1; $1=""; cmd=substr($0,2)
+    if (match(cmd, /\/[^\/]+\.app\//)) name=substr(cmd, RSTART+1, RLENGTH-6); else { n=split(cmd, a, "/"); name=a[n] }
+    mem[name]+=rss; cnt[name]++ }
+  END { for (k in mem) printf "%d\t%s\t%d\n", mem[k]/1024, k, cnt[k] }' \
+  | sort -rn | head -5 | awk -F'\t' '{ printf "  - %s: %d MB (%d proc)\n", $2, $1, $3 }'
+
+if docker info >/dev/null 2>&1; then echo "Docker: rodando"; else echo "Docker: parado"; fi
+if command -v bgrun >/dev/null; then
+  n=$(bgrun list --quiet 2>/dev/null | grep -c . || true)
+  echo "bgrun: $n processo(s) em segundo plano"
+fi
+
+if [[ -n "$free_pct" ]] && (( free_pct < 20 )); then
+  echo "AVISO: memória sob pressão — não inicie outros processos pesados; pare o que não estiver usando (bgrun stop-all, dk down)."
+  exit 1
+fi

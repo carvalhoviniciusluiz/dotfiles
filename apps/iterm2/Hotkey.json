@@ -1,0 +1,25 @@
+{
+  "Profiles": [
+    {
+      "Name": "Hotkey",
+      "Guid": "D07F11E5-0000-4000-8000-000000000002",
+      "Dynamic Profile Parent Name": "Dotfiles",
+      "Has Hotkey": true,
+      "HotKey Activated By Modifier": false,
+      "HotKey Key Code": 50,
+      "HotKey Characters": "`",
+      "HotKey Characters Ignoring Modifiers": "`",
+      "HotKey Modifier Flags": 262144,
+      "HotKey Window Animates": true,
+      "HotKey Window Floats": true,
+      "HotKey Window Dock Click Action": 0,
+      "HotKey Window Reopens On Activation": false,
+      "HotKey Window AutoHides": true,
+      "Window Type": 2,
+      "Screen": -1,
+      "Space": -1,
+      "Rows": 20,
+      "Columns": 80
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+# atuin: histórico do shell em SQLite com busca no Ctrl+R.
+# Sincronização entre máquinas fica DESLIGADA até o usuário decidir
+# (para ativar: `atuin register` ou `atuin login`, depois auto_sync = true).
+auto_sync = false
+update_check = false
+sync_frequency = "0"
+
+# Busca
+search_mode = "fuzzy"
+filter_mode = "global"
+style = "compact"
+inline_height = 20
+show_preview = true
+
+# Enter coloca o comando na linha para revisar; Tab também.
+enter_accept = false
+
+# Não grava no histórico comandos que parecem conter segredos
+# (tokens da AWS, GitHub, Slack, Stripe...) nem os iniciados com espaço.
+secrets_filter = true
+history_filter = ["^\\s"]

@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# ctx — resumo do projeto atual para agentes: stack, gerenciador de pacotes,
+# comandos disponíveis, versões, estado do Git e regras para agentes.
+# Uso: ctx [pasta]   (padrão: raiz do repositório Git, ou a pasta atual)
+set -uo pipefail
+
+start="${1:-$PWD}"
+cd "$start" 2>/dev/null || { echo "ctx: pasta não encontrada: $start" >&2; exit 1; }
+root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$root" || exit 1
+
+has() { command -v "$1" >/dev/null 2>&1; }
+section() { printf '\n## %s\n' "$1"; }
+
+printf '# Projeto: %s\n' "$(basename "$root")"
+printf 'Pasta: %s\n' "$root"
+
+# ---- Stack
+section "Stack"
+stack=()
+if [[ -f package.json ]]; then
+  pm="npm"
+  [[ -f pnpm-lock.yaml ]] && pm="pnpm"
+  [[ -f yarn.lock ]] && pm="yarn"
+  [[ -f bun.lockb || -f bun.lock ]] && pm="bun"
+  declared="$(jq -r '.packageManager // empty' package.json 2>/dev/null)"
+  [[ -n "$declared" ]] && pm="${declared%%@*} (packageManager: $declared)"
+  stack+=("JavaScript/TypeScript — gerenciador: $pm")
+  [[ -f tsconfig.json ]] && stack+=("TypeScript (tsconfig.json)")
+  fw="$(jq -r '[(.dependencies // {}), (.devDependencies // {})] | add | keys[]' package.json 2>/dev/null \
+        | grep -xE 'next|react|vue|svelte|@sveltejs/kit|nuxt|astro|express|fastify|@nestjs/core|hono|vite|vitest|jest|playwright|@playwright/test|prisma|drizzle-orm|tailwindcss' | tr '\n' ' ')"
+  [[ -n "$fw" ]] && stack+=("Bibliotecas-chave: $fw")
+fi
+if [[ -f pyproject.toml || -f requirements.txt ]]; then
+  py="Python"
+  [[ -f uv.lock ]] && py="$py — gerenciador: uv"
+  [[ -f poetry.lock ]] && py="$py — gerenciador: poetry"
+  stack+=("$py")
+fi
+[[ -f Cargo.toml ]] && stack+=("Rust (cargo)")
+[[ -f go.mod ]] && stack+=("Go ($(awk '/^go /{print $2}' go.mod))")
+[[ -f pom.xml ]] && stack+=("Java (Maven)")
+[[ -f build.gradle || -f build.gradle.kts ]] && stack+=("Java/Kotlin (Gradle)")
+[[ -f Gemfile ]] && stack+=("Ruby (bundler)")
+compose="$(find . -maxdepth 1 \( -name 'docker-compose*.y*ml' -o -name 'compose*.y*ml' \) -print -quit | sed 's#^\./##')"
+[[ -f Dockerfile ]] && stack+=("Dockerfile")
+[[ -n "$compose" ]] && stack+=("Docker Compose ($compose) — Docker só sobe com: dk up")
+if ((${#stack[@]})); then printf -- '- %s\n' "${stack[@]}"; else echo "- (não detectada)"; fi
+
+# ---- Versões
+if [[ -f .tool-versions || -f .nvmrc || -f .python-version ]]; then
+  section "Versões fixadas"
+  [[ -f .tool-versions ]] && sed 's/^/- /' .tool-versions
+  [[ -f .nvmrc ]] && echo "- node $(cat .nvmrc) (.nvmrc)"
+  [[ -f .python-version ]] && echo "- python $(cat .python-version) (.python-version)"
+fi
+
+# ---- Comandos
+section "Comandos"
+found=0
+if [[ -f justfile || -f Justfile ]] && has just; then
+  echo "justfile (use \`just <receita>\`):"
+  just --list --unsorted 2>/dev/null | tail -n +2 | sed 's/^ */  - /'
+  found=1
+fi
+if [[ -f package.json ]]; then
+  scripts="$(jq -r '.scripts // {} | to_entries[] | "  - \(.key): \(.value)"' package.json 2>/dev/null)"
+  if [[ -n "$scripts" ]]; then
+    echo "package.json scripts (rode com o gerenciador acima, ex.: pnpm <script>):"
+    echo "$scripts" | head -30
+    found=1
+  fi
+fi
+if [[ -f Makefile ]]; then
+  targets="$(grep -E '^[a-zA-Z0-9_.-]+:([^=]|$)' Makefile | cut -d: -f1 | grep -v '^\.' | head -20 | tr '\n' ' ')"
+  [[ -n "$targets" ]] && { echo "Makefile: $targets"; found=1; }
+fi
+if [[ -f pyproject.toml ]]; then
+  grep -qE '^\[tool\.pytest|pytest' pyproject.toml && { echo "Python: testes com \`uv run pytest\`"; found=1; }
+  grep -qE '^\[tool\.ruff' pyproject.toml && { echo "Python: lint com \`uv run ruff check\`"; found=1; }
+fi
+((found)) || echo "- nenhum comando padronizado encontrado"
+echo "Validação completa: \`check\` (detecta lint, tipos e testes)."
+
+# ---- Regras para agentes
+section "Regras para agentes"
+any=0
+for f in AGENTS.md CLAUDE.md .cursorrules .github/copilot-instructions.md; do
+  if [[ -e "$f" ]]; then
+    if [[ -L "$f" ]]; then echo "- $f -> $(readlink "$f")"; else echo "- $f ($(wc -l < "$f" | tr -d ' ') linhas) — leia antes de mudar código"; fi
+    any=1
+  fi
+done
+((any)) || echo "- nenhum AGENTS.md/CLAUDE.md (use as regras globais)"
+
+# ---- CI
+if [[ -d .github/workflows ]]; then
+  section "CI (GitHub Actions)"
+  for w in .github/workflows/*.y*ml; do
+    [[ -f "$w" ]] && echo "- $(basename "$w"): $(awk -F': *' '/^name:/{print $2; exit}' "$w")"
+  done
+  echo "Falhas recentes: \`ci-logs\`"
+fi
+
+# ---- Git
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  section "Git"
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)"
+  line="- branch: $branch"
+  if [[ -n "$upstream" ]]; then
+    read -r behind ahead < <(git rev-list --left-right --count "$upstream...HEAD" 2>/dev/null)
+    line="$line (upstream $upstream; à frente $ahead, atrás $behind)"
+  else
+    line="$line (sem upstream)"
+  fi
+  echo "$line"
+  remote="$(git remote get-url origin 2>/dev/null)"
+  [[ -n "$remote" ]] && echo "- remoto: $remote"
+  wts="$(git worktree list 2>/dev/null | wc -l | tr -d ' ')"
+  ((wts > 1)) && echo "- worktrees: $wts (veja \`wt list\`)"
+  changes="$(git status --short 2>/dev/null)"
+  if [[ -n "$changes" ]]; then
+    echo "- mudanças não commitadas ($(echo "$changes" | wc -l | tr -d ' ')):"
+    echo "$changes" | head -20 | sed 's/^/    /'
+  else
+    echo "- árvore limpa"
+  fi
+  echo "- últimos commits:"
+  git log -5 --pretty='    %h %s (%ar)' 2>/dev/null
+fi
+
+# ---- Processos do agente
+if has bgrun; then
+  running="$(bgrun list --quiet 2>/dev/null)"
+  if [[ -n "$running" ]]; then
+    section "Processos em segundo plano (bgrun)"
+    echo "$running"
+  fi
+fi

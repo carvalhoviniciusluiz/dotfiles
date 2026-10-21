@@ -65,7 +65,7 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*'
 zstyle ':completion:*' menu select
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 
-# fzf: Ctrl+R busca no histórico, Ctrl+T procura arquivos (usa fd, respeita .gitignore)
+# fzf: Ctrl+T procura arquivos (usa fd, respeita .gitignore); Ctrl+R fica com o atuin
 export FZF_DEFAULT_COMMAND='fd --type f --hidden --exclude .git'
 export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 export FZF_ALT_C_COMMAND='fd --type d --hidden --exclude .git'
@@ -73,6 +73,11 @@ export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border
   --color=fg:#f8f8f2,bg:-1,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9
   --color=info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4'
 source <(fzf --zsh)
+
+# atuin: Ctrl+R busca no histórico (SQLite, com diretório, duração e status de cada
+# comando). Carregado depois do fzf para ficar com o Ctrl+R; a seta ↑ continua
+# filtrando pelo que foi digitado. Config: ~/.config/atuin/config.toml
+eval "$(atuin init zsh --disable-up-arrow)"
 
 # bat (cat com destaque de sintaxe) e eza (ls com status do Git)
 # cat/ls só são trocados em terminal de verdade; agentes e scripts recebem os originais
