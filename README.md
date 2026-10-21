@@ -60,7 +60,7 @@ Arquivos que já existiam são movidos para `~/.dotfiles-backup/<data>/`.
 | Apps                                            | Sublime Text 4, Sublime Merge (assinatura verificada)                                                                                                                                    |
 | Agentes                                         | Claude Code + Codex: skills /commit /pr /review-changes, MCPs ai-memory, rea, playwright, context7; notificações; `AGENTS.md` global com inventário                                      |
 | zsh                                             | autosuggestions, syntax-highlighting, histórico 50k, fzf, zoxide, starship, aliases                                                                                                      |
-| Scripts (`~/.local/bin`)                        | `new-project`, `lefthook-init`, `agent-notify` + comandos para agentes: `ctx`, `check`, `bgrun`, `ports`, `dk`, `wt`, `ci-logs`, `sysload`                                               |
+| Scripts (`~/.local/bin`)                        | `new-project`, `lefthook-init`, `agent-notify` + comandos para agentes: `ctx`, `check`, `bgrun`, `ports`, `dk`, `wt`, `ci-logs`, `sysload`, `agents-restore`                             |
 
 Versões e checksums ficam em `versions.env`; atualize os dois juntos.
 
@@ -77,6 +77,13 @@ macos/tweaks.sh  serviços desligados no login
 Brewfile, tool-versions, asdf-plugins.txt, versions.env
 install.sh
 ```
+
+## Depois de um travamento
+
+`agents-restore` lista as conversas do Claude Code e do Codex com atividade nas
+últimas 6 horas (id, pasta, assunto) e reabre as escolhidas, cada uma numa aba do
+iTerm já retomando a conversa. Sessões ainda abertas aparecem como `[rodando]`
+e não são duplicadas.
 
 ## Manter atualizado
 

@@ -1,0 +1,346 @@
+#!/usr/bin/python3 -I
+"""agents-restore — reabre sessões recentes do Claude Code e do Codex.
+
+Depois de um travamento (do terminal ou do Mac), lista as conversas com
+atividade recente e reabre cada uma numa aba do iTerm, na pasta certa,
+retomando de onde parou (claude --resume <id> / codex resume <id>).
+
+Uso:
+  agents-restore                 lista e pergunta quais reabrir
+  agents-restore --list          só lista (para agentes/scripts)
+  agents-restore --all           reabre todas as que não estão rodando
+  agents-restore 1 3             reabre pelos números da lista
+  agents-restore 3a3a3d6b        reabre pelo id (prefixo basta)
+
+Opções:
+  --hours N         janela de atividade (padrão 6)
+  --claude/--codex  só um dos agentes
+  --full-id         mostra o id completo
+  --detail          mostra também o último pedido de cada sessão
+  --dry-run         mostra os comandos em vez de abrir abas
+  --include-running permite reabrir sessões que parecem estar rodando
+"""
+import argparse
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+CLAUDE_DIR = HOME / ".claude" / "projects"
+CODEX_DIR = HOME / ".codex" / "sessions"
+
+
+def short(text, width):
+    text = " ".join((text or "").split())
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def tilde(path):
+    p = str(path)
+    home = str(HOME)
+    return "~" + p[len(home):] if p == home or p.startswith(home + "/") else p
+
+
+def is_noise(text):
+    """Mensagens injetadas pelo sistema, não digitadas pelo usuário."""
+    t = (text or "").lstrip()
+    return (not t) or t.startswith("<") or t.startswith("# AGENTS.md") or t.startswith("Caveat:")
+
+
+def claude_sessions(since):
+    if not CLAUDE_DIR.is_dir():
+        return []
+    out = []
+    for f in CLAUDE_DIR.glob("*/*.jsonl"):
+        try:
+            mtime = f.stat().st_mtime
+        except OSError:
+            continue
+        if mtime < since:
+            continue
+        sid = cwd = title = first = last = None
+        sidechain_only = True
+        with f.open(errors="replace") as fh:
+            for line in fh:
+                if '"cwd"' not in line and '"aiTitle"' not in line and '"lastPrompt"' not in line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if d.get("aiTitle"):
+                    title = d["aiTitle"]
+                if d.get("type") == "last-prompt" and d.get("lastPrompt"):
+                    last = d["lastPrompt"]
+                if d.get("cwd") and not cwd:
+                    cwd = d["cwd"]
+                if d.get("sessionId") and not sid:
+                    sid = d["sessionId"]
+                if d.get("type") == "user" and not d.get("isSidechain"):
+                    sidechain_only = False
+                    content = (d.get("message") or {}).get("content")
+                    if first is None and isinstance(content, str) and not is_noise(content):
+                        first = content
+        if not sid or not cwd or sidechain_only:
+            continue
+        out.append({
+            "agent": "claude", "id": sid, "cwd": cwd, "mtime": mtime,
+            "title": title or first or "(sem título)", "last": last or first or "",
+        })
+    return out
+
+
+def codex_sessions(since):
+    if not CODEX_DIR.is_dir():
+        return []
+    out = []
+    for f in CODEX_DIR.glob("*/*/*/rollout-*.jsonl"):
+        try:
+            mtime = f.stat().st_mtime
+        except OSError:
+            continue
+        if mtime < since:
+            continue
+        sid = cwd = first = last = None
+        originator = ""
+        with f.open(errors="replace") as fh:
+            for line in fh:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                p = d.get("payload") or {}
+                if d.get("type") == "session_meta" and not sid:
+                    sid, cwd, originator = p.get("id"), p.get("cwd"), p.get("originator") or ""
+                text = None
+                if d.get("type") == "event_msg" and p.get("type") == "user_message":
+                    text = p.get("message")
+                elif d.get("type") == "response_item" and p.get("type") == "message" and p.get("role") == "user":
+                    text = " ".join(c.get("text", "") for c in p.get("content", []) if isinstance(c, dict))
+                if text and not is_noise(text):
+                    if first is None:
+                        first = text
+                    last = text
+        if not sid or not cwd or "exec" in originator:
+            continue
+        out.append({
+            "agent": "codex", "id": sid, "cwd": cwd, "mtime": mtime,
+            "title": first or "(sem mensagens)", "last": last or "",
+        })
+    return out
+
+
+def running_agents():
+    """Processos claude/codex interativos: (agente, cwd, id se conhecido)."""
+    try:
+        ps = subprocess.run(["ps", "-Ao", "pid=,command="], capture_output=True, text=True).stdout
+    except OSError:
+        return []
+    found = []
+    for line in ps.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) != 2:
+            continue
+        pid, cmd = parts
+        argv = cmd.split()
+        names = [os.path.basename(a) for a in argv[:3]]
+        if "claude" in names:
+            agent = "claude"
+        elif "codex" in names or "/@openai/codex/" in cmd:
+            agent = "codex"
+        else:
+            continue
+        if re.search(r"\b(mcp|app-server|login|--print|-p)\b", cmd) or " exec " in cmd:
+            continue
+        m = re.search(r"(?:--resume|-r|resume)\s+([0-9a-f-]{8,})", cmd)
+        try:
+            lsof = subprocess.run(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"],
+                                  capture_output=True, text=True).stdout
+            cwd = next((l[1:] for l in lsof.splitlines() if l.startswith("n")), None)
+        except OSError:
+            cwd = None
+        found.append((agent, cwd, m.group(1) if m else None))
+    return found
+
+
+def mark_running(sessions):
+    procs = running_agents()
+    # sessão mais recente de cada (agente, pasta): é a que o processo naquela pasta está usando
+    newest = {}
+    for s in sessions:
+        k = (s["agent"], s["cwd"])
+        if k not in newest or s["mtime"] > newest[k]["mtime"]:
+            newest[k] = s
+    for s in sessions:
+        s["running"] = False
+    for agent, cwd, sid in procs:
+        if sid:
+            for s in sessions:
+                if s["agent"] == agent and s["id"].startswith(sid):
+                    s["running"] = True
+        elif cwd and (agent, cwd) in newest:
+            newest[(agent, cwd)]["running"] = True
+
+
+def when_label(ts):
+    t = time.localtime(ts)
+    if time.strftime("%Y%m%d", t) == time.strftime("%Y%m%d"):
+        return time.strftime("hoje %H:%M", t)
+    if time.strftime("%Y%m%d", t) == time.strftime("%Y%m%d", time.localtime(time.time() - 86400)):
+        return time.strftime("ontem %H:%M", t)
+    return time.strftime("%d/%m %H:%M", t)
+
+
+def print_table(sessions, full_id, detail):
+    if not sessions:
+        print("Nenhuma sessão de agente com atividade nessa janela de tempo.")
+        return
+    idw = 36 if full_id else 8
+    try:
+        width = os.get_terminal_size().columns
+    except OSError:
+        width = 140
+    print(f"{'#':>2}  {'agente':6}  {'id':{idw}}  {'quando':11}  {'projeto':32}  assunto")
+    for i, s in enumerate(sessions, 1):
+        when = when_label(s["mtime"])
+        sid = s["id"] if full_id else s["id"][:8]
+        proj = short(tilde(s["cwd"]), 32)
+        state = " [rodando]" if s["running"] else ""
+        fixed = 2 + 2 + 6 + 2 + idw + 2 + 11 + 2 + 32 + 2
+        title = short(s["title"], max(20, width - fixed - len(state))) + state
+        print(f"{i:>2}  {s['agent']:6}  {sid:{idw}}  {when:11}  {proj:32}  {title}")
+        if detail and s["last"] and s["last"] != s["title"]:
+            print(f"{'':>{fixed}}↳ último pedido: {short(s['last'], max(20, width - fixed - 17))}")
+
+
+def command_for(s):
+    cd = "cd " + shlex.quote(s["cwd"])
+    if s["agent"] == "claude":
+        return f"{cd} && claude --resume {s['id']}"
+    return f"{cd} && codex resume {s['id']}"
+
+
+def applescript_str(text):
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def open_tab(s):
+    name = f"{s['agent']} · {os.path.basename(s['cwd'].rstrip('/')) or s['cwd']}"
+    script = f'''
+tell application "iTerm"
+  activate
+  if (count of windows) = 0 then
+    set w to (create window with default profile)
+  else
+    set w to current window
+    tell w to create tab with default profile
+  end if
+  tell current session of w
+    set name to {applescript_str(name)}
+    write text {applescript_str(command_for(s))}
+  end tell
+end tell
+'''
+    subprocess.run(["osascript", "-e", script], check=True, capture_output=True)
+
+
+def pick(sessions, tokens, allow_running):
+    chosen = []
+    for tok in tokens:
+        if tok.isdigit() and 1 <= int(tok) <= len(sessions):
+            chosen.append(sessions[int(tok) - 1])
+            continue
+        matches = [s for s in sessions if s["id"].startswith(tok)]
+        if len(matches) != 1:
+            sys.exit(f"agents-restore: '{tok}' não corresponde a uma única sessão da lista")
+        chosen.append(matches[0])
+    seen, result = set(), []
+    for s in chosen:
+        if s["id"] in seen:
+            continue
+        seen.add(s["id"])
+        if s["running"] and not allow_running:
+            print(f"pulando {s['id'][:8]} ({s['agent']}): parece estar rodando (use --include-running)")
+            continue
+        result.append(s)
+    return result
+
+
+def main():
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument("targets", nargs="*")
+    ap.add_argument("--hours", type=float, default=6)
+    ap.add_argument("--claude", action="store_true")
+    ap.add_argument("--codex", action="store_true")
+    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--all", action="store_true")
+    ap.add_argument("--full-id", action="store_true")
+    ap.add_argument("--detail", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--include-running", action="store_true")
+    ap.add_argument("-h", "--help", action="store_true")
+    a = ap.parse_args()
+    if a.help:
+        print(__doc__.strip())
+        return
+
+    since = time.time() - a.hours * 3600
+    sessions = []
+    if not a.codex:
+        sessions += claude_sessions(since)
+    if not a.claude:
+        sessions += codex_sessions(since)
+    sessions.sort(key=lambda s: s["mtime"], reverse=True)
+    mark_running(sessions)
+
+    print_table(sessions, a.full_id, a.detail)
+    if not sessions or a.list:
+        return
+
+    if a.all:
+        targets = [s for s in sessions if a.include_running or not s["running"]]
+    elif a.targets:
+        targets = pick(sessions, a.targets, a.include_running)
+    elif sys.stdin.isatty():
+        try:
+            answer = input("\nReabrir quais? (números ou ids separados por espaço, 'all', Enter = nenhuma): ").strip()
+        except EOFError:
+            answer = ""
+        if not answer:
+            return
+        if answer.lower() in ("all", "todas", "todos"):
+            targets = [s for s in sessions if a.include_running or not s["running"]]
+        else:
+            targets = pick(sessions, answer.split(), a.include_running)
+    else:
+        return
+
+    if not targets:
+        print("Nada para reabrir.")
+        return
+    print()
+    for s in targets:
+        if a.dry_run:
+            print(f"[dry-run] {command_for(s)}")
+            continue
+        if not os.path.isdir(s["cwd"]):
+            print(f"pulando {s['id'][:8]}: a pasta não existe mais ({s['cwd']})")
+            continue
+        try:
+            open_tab(s)
+            print(f"reaberto: {s['agent']} {s['id'][:8]} em {tilde(s['cwd'])}")
+        except subprocess.CalledProcessError as e:
+            msg = (e.stderr or b"").decode(errors="replace").strip()
+            print(f"erro ao abrir aba para {s['id'][:8]}: {msg or e}", file=sys.stderr)
+            if "not allowed" in msg or "-1743" in msg:
+                print("  → libere em Ajustes do Sistema → Privacidade e Segurança → Automação → (seu terminal) → iTerm",
+                      file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
