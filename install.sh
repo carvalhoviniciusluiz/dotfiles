@@ -164,7 +164,7 @@ step_npm() {
   log "Pacotes globais do npm"
   asdf_env
   # shellcheck disable=SC2086
-  npm install -g $NPM_GLOBALS --allow-scripts=pnpm,frida
+  npm install -g $NPM_GLOBALS --allow-scripts=pnpm,frida,agent-desktop
   asdf reshim nodejs
   ok "$NPM_GLOBALS"
 }

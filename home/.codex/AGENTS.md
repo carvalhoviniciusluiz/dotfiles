@@ -87,6 +87,26 @@ Regras:
 - Antes de reabrir várias, rode `sysload`; com memória sob pressão, sugira
   reabrir só as prioritárias.
 
+### `agent-desktop`: testar a interface de apps de desktop
+
+Para quê: ver e operar apps nativos (macOS) pela árvore de acessibilidade, para
+testes de ponta a ponta de interface (clicar, digitar, alternar, rolar, ler
+estado, capturar a janela). Cada comando imprime um JSON com refs (`@<snapshot>:eN`).
+Versão fixada 1.0.2 (`versions.env`).
+
+- Comece com `agent-desktop status` e `agent-desktop skills get desktop` (guia do
+  ciclo snapshot → ação → verificação); `agent-desktop skills get platform` para o macOS.
+- **Só modo headless (padrão)**: ações semânticas, sem mover o mouse nem tomar o
+  foco. **Nunca use `--headed`** (mouse/teclado físicos) sem o usuário permitir
+  naquele momento: ele estaria usando a máquina.
+- Requer Acessibilidade para o app que o executa (iTerm) em Ajustes do Sistema →
+  Privacidade e Segurança → Acessibilidade; quem concede é o usuário. Se
+  `agent-desktop permissions` disser `denied`, peça — não tente contornar.
+- Use só em apps do próprio projeto (builds de desenvolvimento), nunca em apps
+  pessoais do usuário (e-mail, navegador, mensagens).
+- Não mede tempo de quadro nem fluidez: performance se mede de dentro do app
+  (gates do projeto).
+
 ## Gerenciadores de pacotes
 
 - JavaScript/TypeScript: **pnpm** (a não ser que o projeto já use npm, yarn ou
@@ -102,7 +122,7 @@ Use esta seção para responder "o que temos para X?" sem vasculhar o sistema.
 
 | Linguagem | Versão          | Observação                                                                                                                                                                                                                                                            |
 | --------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node.js   | 26.12.0         | globais npm: pnpm, prettier, rea-agents, @openai/codex, @ast-grep/cli, ccusage                                                                                                                                                                                        |
+| Node.js   | 26.12.0         | globais npm: pnpm, prettier, rea-agents, @openai/codex, @ast-grep/cli, ccusage, agent-desktop                                                                                                                                                                         |
 | Python    | 3.14.8          | compilado com xz/zstd do brew (`lzma`, `compression.zstd` ok; sem `tkinter`). Para reinstalar: `CPPFLAGS="-I/opt/homebrew/opt/xz/include -I/opt/homebrew/opt/zstd/include" LDFLAGS="-L/opt/homebrew/opt/xz/lib -L/opt/homebrew/opt/zstd/lib" asdf install python <v>` |
 | Java      | Temurin 21.0.12 | `JAVA_HOME` no `~/.zshrc`                                                                                                                                                                                                                                             |
 | Rust      | 1.99.1          |                                                                                                                                                                                                                                                                       |
@@ -139,6 +159,7 @@ Use esta seção para responder "o que temos para X?" sem vasculhar o sistema.
 | Espaço em disco por pasta            | `dust [pasta]`                                                                                                                                              | asdf                    |
 | Monitor de processos/memória         | `btm` (bottom; interativo, para o usuário) — agentes usem `sysload`                                                                                         | asdf                    |
 | Histórico de comandos                | `atuin` (Ctrl+R; SQLite em `~/.atuin`; sincronização desligada)                                                                                             | binário, `~/.local/opt` |
+| Testar/operar apps de desktop (E2E)  | `agent-desktop` (ver seção acima)                                                                                                                           | npm                     |
 | Custo de uso do Claude Code          | `ccusage daily` / `ccusage monthly`                                                                                                                         | npm                     |
 | Git                                  | 2.56 do brew (`/opt/homebrew/bin/git`); 2.39 do Xcode em `/usr/bin/git`                                                                                     | brew                    |
 
