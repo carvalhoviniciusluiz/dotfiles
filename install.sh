@@ -24,7 +24,7 @@ MACOS_TWEAKS=0
 ONLY=""
 
 STEPS=(preflight brew asdf links git npm uv binaries fonts zsh_plugins
-       apps sublime vscode iterm ghidra ai_memory skills claude codex github)
+       apps sublime vscode iterm ghidra ai_memory skills video claude codex github)
 
 log()  { printf '\n\033[1;35m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
@@ -173,7 +173,8 @@ step_uv() {
   log "Ferramentas Python (uv tool)"
   asdf_env
   uv tool install --force "specify-cli @ git+https://github.com/github/spec-kit.git@$SPEC_KIT_TAG"
-  ok "specify $SPEC_KIT_TAG"
+  uv tool install --force "cmake==$CMAKE_VERSION"
+  ok "specify $SPEC_KIT_TAG, cmake $CMAKE_VERSION"
 }
 
 install_bin() {
@@ -395,6 +396,43 @@ step_skills() {
     done
     ok "$name"
   done
+}
+
+step_video() {
+  log "video-to-skill (agentes analisam vídeos: frames, transcrição, cenas)"
+  local data="$HOME/Library/Application Support/video-to-skill"
+  local bin="$data/bin/vts-extract-$VTS_VERSION"
+  local skill="$HOME/.local/opt/video-to-skill-$VTS_VERSION"
+  # a skill (SKILL.md + references/) e o código-fonte vêm do tag, conferido pelo commit
+  clone_pinned brenoepics/video-to-skill "v$VTS_VERSION" "$VTS_COMMIT" "$skill"
+  if ! "$bin" --version >/dev/null 2>&1; then
+    mkdir -p "$data/bin"
+    if [[ "$(sw_vers -productVersion | cut -d. -f1)" -ge 15 ]]; then
+      fetch "https://github.com/brenoepics/video-to-skill/releases/download/v$VTS_VERSION/vts-extract-macos-arm64.tar.gz" \
+        "$WORK/vts.tar.gz" "$VTS_SHA256"
+      mkdir -p "$WORK/vts"
+      tar -xzf "$WORK/vts.tar.gz" -C "$WORK/vts"
+      install -m 755 "$WORK/vts/vts-extract" "$bin"
+    else
+      # o binário da release usa Metal do macOS 15 (MTLResidencySet) e aborta no 14:
+      # compila do fonte para o 14 (precisa de Rust do asdf e cmake do uv)
+      asdf_env
+      (cd "$skill" && MACOSX_DEPLOYMENT_TARGET=14.0 CARGO_TARGET_DIR="$WORK/vts-target" \
+        cargo build --release --locked -j 4)
+      install -m 755 "$WORK/vts-target/release/vts-extract" "$bin"
+    fi
+  fi
+  "$bin" --version >/dev/null || die "vts-extract $VTS_VERSION não executa"
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "$bin" "$HOME/.local/bin/vts-extract"
+  for dir in "$HOME/.claude/skills" "$HOME/.agents/skills"; do
+    mkdir -p "$dir"
+    ln -sfn "$skill" "$dir/video-to-skill"
+  done
+  # ffmpeg, ffprobe, yt-dlp e o modelo whisper base (~140 MB) vão para "$data";
+  # URLs e SHA-256 fixados no próprio vts-extract (veja: vts-extract check --print-downloads)
+  "$bin" check --fix --yes >/dev/null || warn "dependências do vts-extract: rode 'vts-extract check --fix'"
+  ok "vts-extract $VTS_VERSION + skill /video-to-skill"
 }
 
 step_github() {
