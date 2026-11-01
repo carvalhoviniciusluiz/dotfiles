@@ -1,0 +1,18 @@
+#!/bin/sh
+# Load the local ai-memory credential only into the Codex child process.
+# No credential value belongs in this repository or command arguments.
+set +x
+set -eu
+
+ai_memory_token_file="$HOME/Library/Application Support/ai-memory/auth-tokens/default"
+if [ -z "${AI_MEMORY_AUTH_TOKEN:-}" ] && [ -r "$ai_memory_token_file" ]; then
+    AI_MEMORY_AUTH_TOKEN=$(cat "$ai_memory_token_file")
+    export AI_MEMORY_AUTH_TOKEN
+fi
+
+codex_shim="${ASDF_DATA_DIR:-$HOME/.asdf}/shims/codex"
+if [ ! -x "$codex_shim" ]; then
+    printf '%s\n' 'Codex asdf shim missing; restore the nodejs installation.' >&2
+    exit 127
+fi
+exec "$codex_shim" "$@"

@@ -98,3 +98,16 @@ cd ~/Development/dotfiles && gitleaks git --staged && git commit -am "..." && gi
 
 **Nunca** coloque aqui tokens, chaves ou `.env`: o lefthook roda o gitleaks a
 cada commit.
+
+### Codex e autenticação local do ai-memory
+
+O lançador `~/.local/bin/codex` carrega o token existente de
+`~/Library/Application Support/ai-memory/auth-tokens/default` somente no
+processo filho do Codex e delega ao shim do asdf. Mantém a configuração HTTP
+`bearer_token_env_var = "AI_MEMORY_AUTH_TOKEN"`; não desativa autenticação.
+O segredo permanece fora dos dotfiles e não deve ser copiado para este repositório.
+Uma variável já fornecida pelo operador tem prioridade. O passo `codex` do
+`install.sh` instala o link; requer ai-memory configurado antes.
+Após adicionar o lançador, use `rehash` no zsh se houver caminho antigo em cache
+e reabra o Codex. Apps GUI que iniciem o executável diretamente pelo shim não
+passam por este lançador.

@@ -172,7 +172,7 @@ originais do sistema; os aliases `eza`/`bat` só valem no terminal do usuário.
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Claude Code              | MCPs: ai-memory, rea (pede aprovação: `ask`), playwright, context7; hooks Stop/Notification → `agent-notify`                                 |
 | Codex CLI 0.163          | MCPs: ai-memory, rea, playwright, context7 (OAuth); notificações `[tui]` via OSC 9 quando a aba não está em foco                             |
-| ai-memory 3.1.1          | memória compartilhada entre Claude e Codex; serviço LaunchAgent, web em http://127.0.0.1:49374/web                                           |
+| ai-memory 3.2.2          | memória compartilhada entre Claude e Codex; serviço LaunchAgent, web em http://127.0.0.1:49374/web                                           |
 | REA (`rea-agents@6.7.0`) | engenharia reversa via MCP; Ghidra 12.1.4 em `~/.local/opt/ghidra_12.1.4_PUBLIC` (natives mac_arm_64 compilados), Hopper em `~/Applications` |
 
 ### Apps e editores

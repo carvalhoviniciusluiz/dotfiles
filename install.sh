@@ -340,8 +340,9 @@ step_ghidra() {
 step_ai_memory() {
   log "ai-memory"
   if [[ ! -x "$HOME/.local/bin/ai-memory" ]]; then
-    curl -fsSL https://github.com/akitaonrails/ai-memory/releases/latest/download/install.sh -o "$WORK/aim.sh"
-    sh "$WORK/aim.sh"
+    fetch "https://github.com/akitaonrails/ai-memory/releases/download/v${AI_MEMORY_VERSION}/install.sh" \
+      "$WORK/aim.sh" "$AI_MEMORY_INSTALL_SHA256"
+    AI_MEMORY_VERSION="$AI_MEMORY_VERSION" sh "$WORK/aim.sh"
   fi
   "$HOME/.local/bin/ai-memory" setup --yes --agent claude-code --agent codex
 }
@@ -377,6 +378,7 @@ step_codex() {
   grep -q '^\[mcp_servers.context7\]' "$HOME/.codex/config.toml" 2>/dev/null || \
     printf '\n[mcp_servers.context7]\nurl = "%s"\n' "$CONTEXT7_MCP_URL" >> "$HOME/.codex/config.toml"
   /usr/bin/python3 -I "$DOTFILES/codex/merge-config.py"
+  link_home .local/bin/codex
   rea setup --skill-client codex --yes --json >/dev/null 2>&1 || warn "skill do REA: rode 'rea setup --skill-client codex --yes'"
   ok "MCPs: rea, playwright, context7 + notificações [tui]"
   warn "abra o Codex, rode /hooks e escolha 'Trust all' (hooks do ai-memory)"
