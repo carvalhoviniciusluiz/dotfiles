@@ -15,6 +15,7 @@ lazygit https://github.com/nklmilojevic/asdf-lazygit.git
 lefthook https://github.com/jtzero/asdf-lefthook.git
 lua https://github.com/Stratus3D/asdf-lua.git
 nodejs https://github.com/asdf-vm/asdf-nodejs.git
+php https://github.com/asdf-community/asdf-php.git
 python https://github.com/asdf-community/asdf-python.git
 ripgrep https://gitlab.com/wt0f/asdf-ripgrep.git
 rust https://github.com/asdf-community/asdf-rust.git

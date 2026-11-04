@@ -106,6 +106,25 @@ step_brew() {
   ok "brew: $(brew list --formula | tr '\n' ' ')"
 }
 
+# PHP: o plugin do asdf compila com uma dúzia de pacotes do brew (horas no macOS 14).
+# Usa o binário estático do static-php-cli (conjunto "common") dentro do asdf.
+install_php_static() {
+  local version="$1" dest="$HOME/.asdf/installs/php/$1"
+  [[ "$version" == "$PHP_STATIC_VERSION" ]] || die "php $version difere de PHP_STATIC_VERSION ($PHP_STATIC_VERSION)"
+  fetch "https://dl.static-php.dev/static-php-cli/common/php-$version-cli-macos-aarch64.tar.gz" \
+    "$WORK/php.tar.gz" "$PHP_STATIC_SHA256"
+  mkdir -p "$dest/bin"
+  tar -xzf "$WORK/php.tar.gz" -C "$dest/bin"
+  chmod +x "$dest/bin/php"
+}
+
+# PHP 7.x: sem binário pronto para arm64; compila com php/build-legacy.sh (sem brew).
+install_php_legacy() {
+  [[ "$1" == "$PHP_LEGACY_VERSION" ]] || die "php $1 difere de PHP_LEGACY_VERSION ($PHP_LEGACY_VERSION)"
+  "$DOTFILES/php/build-legacy.sh" "$PHP_LEGACY_VERSION" "$PHP_LEGACY_SHA256" \
+    "$OPENSSL_LEGACY_VERSION" "$OPENSSL_LEGACY_SHA256" "$WORK/php-legacy"
+}
+
 step_asdf() {
   log "asdf: plugins e versões (~/.tool-versions)"
   asdf_env
@@ -115,17 +134,24 @@ step_asdf() {
   done < "$DOTFILES/asdf-plugins.txt"
   cp "$DOTFILES/tool-versions" "$HOME/.tool-versions"
 
-  while read -r tool version; do
+  local tool versions version
+  while read -r tool versions; do
     [[ -z "$tool" || "$tool" == \#* ]] && continue
-    if asdf list "$tool" 2>/dev/null | grep -q "$version"; then ok "$tool $version"; continue; fi
-    if [[ "$tool" == "python" ]]; then
-      CPPFLAGS="-I/opt/homebrew/opt/xz/include -I/opt/homebrew/opt/zstd/include" \
-      LDFLAGS="-L/opt/homebrew/opt/xz/lib -L/opt/homebrew/opt/zstd/lib" \
-      asdf install python "$version"
-    else
-      asdf install "$tool" "$version"
-    fi
-    ok "$tool $version"
+    for version in $versions; do
+      if asdf list "$tool" 2>/dev/null | grep -q "$version"; then ok "$tool $version"; continue; fi
+      if [[ "$tool" == "php" && "$version" == 7.* ]]; then
+        install_php_legacy "$version"
+      elif [[ "$tool" == "php" ]]; then
+        install_php_static "$version"
+      elif [[ "$tool" == "python" ]]; then
+        CPPFLAGS="-I/opt/homebrew/opt/xz/include -I/opt/homebrew/opt/zstd/include" \
+        LDFLAGS="-L/opt/homebrew/opt/xz/lib -L/opt/homebrew/opt/zstd/lib" \
+        asdf install python "$version"
+      else
+        asdf install "$tool" "$version"
+      fi
+      ok "$tool $version"
+    done
   done < "$HOME/.tool-versions"
   asdf reshim
 }
