@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# updates-check — compara as versões fixadas no dotfiles (tool-versions,
+# versions.env) com a última versão publicada de cada programa. Só lê: não
+# instala nada. É a etapa 1 do protocolo docs/protocolo-de-atualizacao.md.
+# Saída 0 = tudo em dia, 1 = há versão nova, 2 = erro de uso.
+set -uo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/Development/dotfiles}"
+
+usage() {
+  cat <<'EOF'
+uso: updates-check [--only asdf|bin|npm|outros] [--all]
+
+Lista o que tem versão nova em relação ao dotfiles. Só lê (rede: GitHub via gh,
+npm, PyPI, sites oficiais). Por padrão mostra só o que mudou; --all mostra tudo.
+
+Colunas: SITUAÇÃO  NOME  FIXADA -> ÚLTIMA  [observação]
+  nova      versão nova publicada
+  linguagem há correção na mesma linha (ex.: 3.14.8 -> 3.14.10); salto de
+            versão menor/maior aparece como observação, não como atualização
+  ok        em dia (só com --all)
+  ?         não foi possível consultar
+
+Siga docs/protocolo-de-atualizacao.md antes de atualizar qualquer item.
+EOF
+}
+
+ONLY="" ALL=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --only) ONLY="${2:-}"; shift 2 ;;
+    --all) ALL=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+
+[[ -f "$DOTFILES/versions.env" ]] || { echo "updates-check: não achei $DOTFILES/versions.env" >&2; exit 2; }
+# shellcheck source=/dev/null
+source "$DOTFILES/versions.env"
+
+found=0
+norm() { local v="${1#v}"; v="${v#Ghidra_}"; v="${v%_build}"; echo "${v#rea-agents-}"; }
+show() { # situação nome fixada última [obs]
+  local st="$1" name="$2" cur="$3" new="$4" obs="${5:-}"
+  [[ "$st" == ok && $ALL -eq 0 ]] && return
+  [[ "$st" == nova || "$st" == linguagem ]] && found=1
+  printf '%-9s %-22s %s -> %s%s\n' "$st" "$name" "$cur" "$new" "${obs:+  [$obs]}"
+}
+cmp() { # nome fixada última [obs]
+  local cur new; cur=$(norm "$2"); new=$(norm "$3")
+  if [[ -z "$new" || "$new" == null ]]; then show "?" "$1" "$cur" "?" "${4:-}"
+  elif [[ "$cur" == "$new" ]]; then show ok "$1" "$cur" "$new"
+  else show nova "$1" "$cur" "$new" "${4:-}"; fi
+}
+gh_latest() { gh api "repos/$1/releases/latest" --jq .tag_name 2>/dev/null; }
+gh_tag() { gh api "repos/$1/tags" --jq '.[0].name' 2>/dev/null; }
+
+section() { [[ -z "$ONLY" || "$ONLY" == "$1" ]]; }
+
+if section asdf; then
+  echo "== asdf (tool-versions)"
+  LANGS=" nodejs python java rust lua php "
+  while read -r tool cur _; do
+    [[ -z "${tool:-}" || "$tool" == \#* ]] && continue
+    if [[ "$tool" == php ]]; then continue; fi   # php: estático, ver "outros"
+    if [[ "$LANGS" == *" $tool "* ]]; then
+      case "$tool" in
+        java) line="${cur%%.*}"; latest=$(asdf list all java 2>/dev/null | grep -E "^${line}\.[0-9]" | grep -vE 'beta|ea' | tail -1)
+              major=$(asdf list all java 2>/dev/null | grep -E '^temurin-[0-9]+\.' | grep -vE 'beta|ea' | sed -E 's/^temurin-([0-9]+)\..*/\1/' | sort -n | tail -1)
+              obs=""; [[ "${line#temurin-}" != "$major" ]] && obs="linha mais nova: Temurin $major (decisão do usuário)" ;;
+        *) minor=$(echo "$cur" | cut -d. -f1-2)
+           latest=$(asdf list all "$tool" 2>/dev/null | grep -E "^${minor//./\\.}\.[0-9]+$" | tail -1)
+           top=$(asdf latest "$tool" 2>/dev/null); top="${top%t}"
+           obs=""; [[ -n "$top" && "$(echo "$top" | cut -d. -f1-2)" != "$minor" ]] && obs="linha nova: $top (salto de versão; decisão do usuário)" ;;
+      esac
+      if [[ -z "$latest" ]]; then show "?" "$tool" "$cur" "?"
+      elif [[ "$latest" != "$cur" ]]; then show linguagem "$tool" "$cur" "$latest" "$obs"
+      elif [[ -n "$obs" ]]; then printf '%-9s %-22s %s  [%s]\n' info "$tool" "$cur" "$obs"
+      else show ok "$tool" "$cur" "$cur"; fi
+    else
+      cmp "$tool" "$cur" "$(asdf latest "$tool" 2>/dev/null)"
+    fi
+  done < "$DOTFILES/tool-versions"
+fi
+
+if section bin; then
+  echo "== binários e apps (versions.env)"
+  while read -r var repo name; do
+    cur="${!var:-}"; [[ -z "$cur" ]] && continue
+    cmp "$name" "$cur" "$(gh_latest "$repo")"
+  done <<'EOF'
+WATCHEXEC_VERSION watchexec/watchexec watchexec
+ZOXIDE_VERSION ajeetdsouza/zoxide zoxide
+TLRC_VERSION tldr-pages/tlrc tlrc
+ATUIN_VERSION atuinsh/atuin atuin
+IPSW_VERSION blacktop/ipsw ipsw
+ISMC_VERSION dkorunic/iSMC iSMC
+MACMON_VERSION vladkens/macmon macmon
+CRAFT_ANYTHING_VERSION storytold/craft-anything craft-anything
+GHIDRA_VERSION NationalSecurityAgency/ghidra ghidra
+AI_MEMORY_VERSION akitaonrails/ai-memory ai-memory
+VTS_VERSION brenoepics/video-to-skill video-to-skill
+MDM_VERSION anefzaoui/misterdownloadmanager mister-download-manager
+PACKAGE_CONTROL_VERSION wbond/package_control package-control
+NERDFONT_VERSION ryanoasis/nerd-fonts nerd-fonts
+FIRACODE_VERSION tonsky/FiraCode firacode
+EOF
+  cmp spec-kit "$SPEC_KIT_TAG" "$(gh_latest github/spec-kit)"
+  cmp zsh-autosuggestions "$ZSH_AUTOSUGGESTIONS_TAG" "$(gh_tag zsh-users/zsh-autosuggestions)"
+  cmp zsh-syntax-highlighting "$ZSH_SYNTAX_HIGHLIGHTING_TAG" "$(gh_tag zsh-users/zsh-syntax-highlighting)"
+fi
+
+if section npm; then
+  echo "== npm (globais e MCPs)"
+  for p in $NPM_GLOBALS; do n="${p%@*}"; cmp "$n" "${p##*@}" "$(npm view "$n" version 2>/dev/null)"; done
+  cmp "@playwright/mcp" "$PLAYWRIGHT_MCP_VERSION" "$(npm view @playwright/mcp version 2>/dev/null)"
+fi
+
+if section outros; then
+  echo "== outros"
+  cmp cmake "$CMAKE_VERSION" "$(curl -fsSL https://pypi.org/pypi/cmake/json 2>/dev/null | jq -r .info.version 2>/dev/null)"
+  php_line=$(echo "$PHP_STATIC_VERSION" | cut -d. -f1-2)
+  cmp php-estatico "$PHP_STATIC_VERSION" "$(curl -fsSL https://dl.static-php.dev/static-php-cli/common/ 2>/dev/null \
+    | grep -oE "php-${php_line//./\\.}\.[0-9]+-cli-macos-aarch64\.tar\.gz" | sed -E 's/^php-(.*)-cli.*/\1/' | sort -uV | tail -1)"
+  cmp sublime-text "$SUBLIME_TEXT_BUILD" "$(curl -fsSL https://www.sublimetext.com/updates/4/stable_update_check 2>/dev/null | jq -r .latest_version 2>/dev/null)"
+  cmp sublime-merge "$SUBLIME_MERGE_BUILD" "$(curl -fsSL https://www.sublimemerge.com/updates/stable_update_check 2>/dev/null | jq -r .latest_version 2>/dev/null)"
+  rust_cur=$(awk '$1=="rust"{print $2}' "$DOTFILES/tool-versions")
+  if [[ "$RUST_STD_X86_64_VERSION" == "$rust_cur" ]]; then show ok rust-std-x86_64 "$RUST_STD_X86_64_VERSION" "$rust_cur"
+  else show nova rust-std-x86_64 "$RUST_STD_X86_64_VERSION" "$rust_cur" "acompanha a versão da Rust"; fi
+  echo "fixos de propósito (não consultados): PHP legado $PHP_LEGACY_VERSION, OpenSSL $OPENSSL_LEGACY_VERSION"
+fi
+
+if (( found )); then echo "Há atualizações. Siga docs/protocolo-de-atualizacao.md."; exit 1; fi
+echo "Tudo em dia."
+exit 0

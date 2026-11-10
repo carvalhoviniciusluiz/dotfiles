@@ -4,6 +4,9 @@
 # Uso: ctx [pasta]   (padrão: raiz do repositório Git, ou a pasta atual)
 set -uo pipefail
 
+case "${1:-}" in
+  -h|--help) sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
 start="${1:-$PWD}"
 cd "$start" 2>/dev/null || { echo "ctx: pasta não encontrada: $start" >&2; exit 1; }
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"

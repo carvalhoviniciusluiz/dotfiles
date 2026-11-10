@@ -3,6 +3,10 @@
 # atual e instala os hooks. Uso: lefthook-init [--force]
 set -euo pipefail
 
+case "${1:-}" in
+  -h|--help) sed -n '2,3p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
 template="$HOME/.config/lefthook/lefthook.yml"
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
   echo "lefthook-init: não é um repositório Git" >&2

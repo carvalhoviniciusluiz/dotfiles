@@ -9,6 +9,9 @@
 set -uo pipefail
 
 die() { echo "wt: $*" >&2; exit 1; }
+case "${1:-}" in
+  -h|--help|help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
 main_root="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || die "não é um repositório Git"
 main_root="$(dirname "$main_root")"
 repo="$(basename "$main_root")"

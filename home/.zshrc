@@ -14,7 +14,7 @@ export PATH="$HOME/.local/bin:$PATH"
 # (helpers do iTerm + Claude Code; instalar com ./install.sh --with-bin)
 export PATH="$HOME/bin:$PATH"
 # Java (Temurin 21 via asdf) e Ghidra para o REA
-export JAVA_HOME="$HOME/.asdf/installs/java/temurin-21.0.12+101.0.LTS"
+export JAVA_HOME="$HOME/.asdf/installs/java/temurin-21.0.13+9.0.LTS"
 export PATH="$JAVA_HOME/bin:$PATH"
 export GHIDRA_INSTALL_DIR="$HOME/.local/opt/ghidra_12.1.4_PUBLIC"
 

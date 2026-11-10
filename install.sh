@@ -24,7 +24,7 @@ MACOS_TWEAKS=0
 ONLY=""
 
 STEPS=(preflight brew asdf links git npm uv binaries fonts zsh_plugins
-       apps sublime vscode iterm ghidra ai_memory skills video claude codex github)
+       apps sublime vscode iterm ghidra ai_memory skills video claude codex craft github)
 
 log()  { printf '\n\033[1;35m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
@@ -253,7 +253,7 @@ step_binaries() {
     "https://github.com/dkorunic/iSMC/releases/download/v$ISMC_VERSION/iSMC_Darwin_all.tar.gz" \
     "$ISMC_SHA256" iSMC
   install_bin macmon "$MACMON_VERSION" \
-    "https://github.com/vladkens/macmon/releases/download/v$MACMON_VERSION/macmon-v$MACMON_VERSION.tar.gz" \
+    "https://github.com/vladkens/macmon/releases/download/v$MACMON_VERSION/macmon-v$MACMON_VERSION-aarch64-apple-darwin.tar.gz" \
     "$MACMON_SHA256" macmon
   # importa o histórico existente do zsh uma vez (sincronização fica desligada)
   if [[ ! -f "$HOME/.atuin/data/history.db" ]]; then
@@ -407,7 +407,7 @@ step_ghidra() {
 
 step_ai_memory() {
   log "ai-memory"
-  if [[ ! -x "$HOME/.local/bin/ai-memory" ]]; then
+  if ! "$HOME/.local/bin/ai-memory" --version 2>/dev/null | grep -q " $AI_MEMORY_VERSION\$"; then
     fetch "https://github.com/akitaonrails/ai-memory/releases/download/v${AI_MEMORY_VERSION}/install.sh" \
       "$WORK/aim.sh" "$AI_MEMORY_INSTALL_SHA256"
     AI_MEMORY_VERSION="$AI_MEMORY_VERSION" sh "$WORK/aim.sh"
@@ -423,10 +423,13 @@ step_claude() {
   local java_home ghidra="$HOME/.local/opt/ghidra_${GHIDRA_VERSION}_PUBLIC"
   java_home="$(asdf where java)"
   claude mcp remove rea --scope user >/dev/null 2>&1 || true
-  claude mcp add --scope user rea -e GHIDRA_INSTALL_DIR="$ghidra" -e JAVA_HOME="$java_home" \
+  local hopper="$HOME/Applications/Hopper Disassembler.app/Contents/MacOS/hopper" hopper_env=()
+  [[ -x "$hopper" ]] && hopper_env=(-e "HOPPER_LAUNCHER_PATH=$hopper")
+  claude mcp add --scope user rea -e GHIDRA_INSTALL_DIR="$ghidra" -e JAVA_HOME="$java_home" ${hopper_env[@]+"${hopper_env[@]}"} \
     -- npx -y "rea-agents@${NPM_GLOBALS##*rea-agents@}" mcp
-  claude mcp list 2>/dev/null | grep -q '^playwright:' || \
-    claude mcp add --scope user playwright -- npx -y "@playwright/mcp@$PLAYWRIGHT_MCP_VERSION"
+  # remove e registra de novo: assim uma versão nova em versions.env chega ao Claude Code
+  claude mcp remove playwright --scope user >/dev/null 2>&1 || true
+  claude mcp add --scope user playwright -- npx -y "@playwright/mcp@$PLAYWRIGHT_MCP_VERSION"
   claude mcp list 2>/dev/null | grep -q '^context7:' || \
     claude mcp add --scope user --transport http context7 "$CONTEXT7_MCP_URL"
   claude mcp list 2>/dev/null | grep -q '^mister-download-manager:' || \
@@ -441,7 +444,10 @@ step_codex() {
   local java_home ghidra="$HOME/.local/opt/ghidra_${GHIDRA_VERSION}_PUBLIC"
   java_home="$(asdf where java)"
   codex mcp remove rea >/dev/null 2>&1 || true
-  codex mcp add rea --env GHIDRA_INSTALL_DIR="$ghidra" --env JAVA_HOME="$java_home" \
+  local hopper="$HOME/Applications/Hopper Disassembler.app/Contents/MacOS/hopper" hopper_env=()
+  [[ -x "$hopper" ]] && hopper_env=(--env "HOPPER_LAUNCHER_PATH=$hopper")
+  # remover e registrar de novo apaga as aprovações por ferramenta do REA feitas no Codex
+  codex mcp add rea --env GHIDRA_INSTALL_DIR="$ghidra" --env JAVA_HOME="$java_home" ${hopper_env[@]+"${hopper_env[@]}"} \
     -- npx -y "rea-agents@${NPM_GLOBALS##*rea-agents@}" mcp
   codex mcp remove playwright >/dev/null 2>&1 || true
   codex mcp add playwright -- npx -y "@playwright/mcp@$PLAYWRIGHT_MCP_VERSION"
@@ -451,7 +457,7 @@ step_codex() {
   codex mcp add mister-download-manager -- "/Applications/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager-mcp"
   /usr/bin/python3 -I "$DOTFILES/codex/merge-config.py"
   link_home .local/bin/codex
-  rea setup --skill-client codex --yes --json >/dev/null 2>&1 || warn "skill do REA: rode 'rea setup --skill-client codex --yes'"
+  rea setup --skill-client codex --skill-client claude_code --yes --json >/dev/null 2>&1 || warn "skill do REA: rode 'rea setup --skill-client codex --skill-client claude_code --yes'"
   ok "MCPs: rea, playwright, context7, mister-download-manager + notificações [tui]"
   warn "abra o Codex, rode /hooks e escolha 'Trust all' (hooks do ai-memory)"
 }
@@ -489,7 +495,7 @@ step_video() {
       # compila do fonte para o 14 (precisa de Rust do asdf e cmake do uv)
       asdf_env
       (cd "$skill" && MACOSX_DEPLOYMENT_TARGET=14.0 CARGO_TARGET_DIR="$WORK/vts-target" \
-        cargo build --release --locked -j 4)
+        nice -n 19 cargo build --release --locked -j 2)
       install -m 755 "$WORK/vts-target/release/vts-extract" "$bin"
     fi
   fi
@@ -504,6 +510,28 @@ step_video() {
   # URLs e SHA-256 fixados no próprio vts-extract (veja: vts-extract check --print-downloads)
   "$bin" check --fix --yes >/dev/null || warn "dependências do vts-extract: rode 'vts-extract check --fix'"
   ok "vts-extract $VTS_VERSION + skill /video-to-skill"
+}
+
+step_craft() {
+  log "Craft Anything $CRAFT_ANYTHING_VERSION (alfa, em observação: captura e comparação de sites)"
+  local v="$CRAFT_ANYTHING_VERSION" dest="$HOME/.local/opt/craft-anything-$CRAFT_ANYTHING_VERSION"
+  if ! "$dest/craft-anything-cli" --version >/dev/null 2>&1; then
+    fetch "https://github.com/storytold/craft-anything/releases/download/v$v/craft-anything-cli-$v-macos-universal.zip" \
+      "$WORK/craft.zip" "$CRAFT_ANYTHING_SHA256"
+    ditto -x -k "$WORK/craft.zip" "$WORK/craft"
+    mkdir -p "$dest"
+    cp -R "$WORK/craft/craft-anything-cli-$v-macos-universal/." "$dest/"
+  fi
+  codesign --verify --strict "$dest/craft-anything-cli" || die "assinatura do craft-anything-cli não confere"
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "$dest/craft-anything-cli" "$HOME/.local/bin/craft-anything-cli"
+  # 8 GB de RAM: um build por vez; sem Ghidra (pede 4 GB+ de heap e tiraria a "segunda opinião" do REA)
+  "$dest/craft-anything-cli" settings-set --key build.parallel --value 1 >/dev/null
+  # MCP só no Claude Code (que carrega as ferramentas sob demanda); sem a skill, que disputaria pedidos com a do REA.
+  # No Codex ele anunciaria ~100 ferramentas em toda sessão.
+  "$dest/craft-anything-cli" --format text setup --yes --no-skill --client claude_code >/dev/null \
+    || warn "rode: craft-anything-cli setup --no-skill --client claude_code"
+  ok "craft-anything-cli $v + MCP craft-anything (Claude Code)"
 }
 
 step_github() {
