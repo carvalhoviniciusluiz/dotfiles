@@ -215,7 +215,9 @@ step_uv() {
   asdf_env
   uv tool install --force "specify-cli @ git+https://github.com/github/spec-kit.git@$SPEC_KIT_TAG"
   uv tool install --force "cmake==$CMAKE_VERSION"
-  ok "specify $SPEC_KIT_TAG, cmake $CMAKE_VERSION"
+  # OCR local de PDFs e imagens; modelos (~73 MB) vão para ~/.cache/huggingface no primeiro uso
+  uv tool install --force "indra-ocr==$INDRA_OCR_VERSION"
+  ok "specify $SPEC_KIT_TAG, cmake $CMAKE_VERSION, indra-ocr $INDRA_OCR_VERSION"
 }
 
 install_bin() {

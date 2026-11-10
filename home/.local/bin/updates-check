@@ -120,6 +120,7 @@ fi
 if section outros; then
   echo "== outros"
   cmp cmake "$CMAKE_VERSION" "$(curl -fsSL https://pypi.org/pypi/cmake/json 2>/dev/null | jq -r .info.version 2>/dev/null)"
+  cmp indra-ocr "$INDRA_OCR_VERSION" "$(curl -fsSL https://pypi.org/pypi/indra-ocr/json 2>/dev/null | jq -r .info.version 2>/dev/null)"
   php_line=$(echo "$PHP_STATIC_VERSION" | cut -d. -f1-2)
   cmp php-estatico "$PHP_STATIC_VERSION" "$(curl -fsSL https://dl.static-php.dev/static-php-cli/common/ 2>/dev/null \
     | grep -oE "php-${php_line//./\\.}\.[0-9]+-cli-macos-aarch64\.tar\.gz" | sed -E 's/^php-(.*)-cli.*/\1/' | sort -uV | tail -1)"
