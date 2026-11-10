@@ -1,1 +1,7 @@
 dracula-theme.theme-dracula
+swiftlang.swift-vscode
+llvm-vs-code-extensions.lldb-dap
+ms-python.python
+ms-python.vscode-pylance
+ms-python.debugpy
+ms-python.vscode-python-envs

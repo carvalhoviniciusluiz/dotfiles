@@ -435,7 +435,10 @@ step_claude() {
   claude mcp list 2>/dev/null | grep -q '^mister-download-manager:' || \
     claude mcp add --scope user mister-download-manager -- "/Applications/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager-mcp"
   /usr/bin/python3 -I "$DOTFILES/claude/merge-settings.py" "$DOTFILES/claude/settings.patch.json"
-  ok "MCPs: rea (ask), playwright, context7, mister-download-manager + hooks de notificação"
+  # plugin oficial: LSP do Swift (sourcekit-lsp do Xcode) para projetos Swift
+  claude plugin list 2>/dev/null | grep -q 'swift-lsp@claude-plugins-official' || \
+    claude plugin install swift-lsp@claude-plugins-official >/dev/null 2>&1 || warn "plugin swift-lsp: rode 'claude plugin install swift-lsp@claude-plugins-official'"
+  ok "MCPs: rea (ask), playwright, context7, mister-download-manager + plugin swift-lsp + hooks de notificação"
 }
 
 step_codex() {

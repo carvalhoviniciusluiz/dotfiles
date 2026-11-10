@@ -490,19 +490,19 @@ originais do sistema; os aliases `eza`/`bat` só valem no terminal do usuário.
 
 ### Agentes, MCP e engenharia reversa
 
-| Item                     | Situação                                                                                                                                              |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude Code              | MCPs: ai-memory, rea (pede aprovação: `ask`), playwright, context7, mister-download-manager, craft-anything; hooks Stop/Notification → `agent-notify` |
-| Codex CLI 0.167          | MCPs: ai-memory, rea, playwright, context7 (OAuth), mister-download-manager; notificações `[tui]` via OSC 9 quando a aba não está em foco             |
-| ai-memory 3.4.5          | memória compartilhada entre Claude e Codex; serviço LaunchAgent, web em http://127.0.0.1:49374/web                                                    |
-| REA (`rea-agents@6.8.0`) | engenharia reversa via MCP; Ghidra 12.1.4 em `~/.local/opt/ghidra_12.1.4_PUBLIC` (natives mac_arm_64 compilados), Hopper em `~/Applications`          |
+| Item                     | Situação                                                                                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code              | MCPs: ai-memory, rea (pede aprovação: `ask`), playwright, context7, mister-download-manager, craft-anything; plugin `swift-lsp`; hooks Stop/Notification → `agent-notify` |
+| Codex CLI 0.167          | MCPs: ai-memory, rea, playwright, context7 (OAuth), mister-download-manager; notificações `[tui]` via OSC 9 quando a aba não está em foco                                 |
+| ai-memory 3.4.5          | memória compartilhada entre Claude e Codex; serviço LaunchAgent, web em http://127.0.0.1:49374/web                                                                        |
+| REA (`rea-agents@6.8.0`) | engenharia reversa via MCP; Ghidra 12.1.4 em `~/.local/opt/ghidra_12.1.4_PUBLIC` (natives mac_arm_64 compilados), Hopper em `~/Applications`                              |
 
 ### Apps e editores
 
 | App                     | CLI      | Observação                                                                                                                                                                                           |
 | ----------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | iTerm2                  | —        | Dracula, FiraCode Nerd Font Mono, "Edição de texto natural" (⌥⌫ apaga palavra); janela Hotkey com ⌃\` (perfil Hotkey); sem integração de shell (o usuário não quer a barra de comando nem as marcas) |
-| VS Code                 | `code`   | Dracula, Fira Code                                                                                                                                                                                   |
+| VS Code                 | `code`   | Dracula, Fira Code; extensões Swift (swift-vscode, lldb-dap) e Python (python, pylance, debugpy)                                                                                                     |
 | Sublime Text 4          | `subl`   | Dracula, Fira Code, LSP (TS/Python), Terminus, JsPrettier                                                                                                                                            |
 | Sublime Merge           | `smerge` | cliente Git gráfico                                                                                                                                                                                  |
 | Mister Download Manager | `mdm`    | Gerenciador de downloads (GPL-3.0); MCP `mister-download-manager`; dados em `~/Library/Application Support/misterdownloadmanager` (ver seção acima)                                                  |
