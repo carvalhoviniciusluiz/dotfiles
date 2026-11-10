@@ -139,6 +139,34 @@ quadros de um trecho. O vídeo não sai da máquina.
   a rolagem são quedas. Isso é só indício: a gravação tem no máximo 30 fps e
   performance se confirma dentro do app.
 
+### Craft Anything (MCP `craft-anything`): sites como o visitante vê
+
+Para quê: capturar um site (screenshots em várias larguras, tokens de design:
+fontes, cores em hex, espaçamentos, raios, breakpoints, layout por largura,
+formulários sem valores) e comparar duas capturas ou screenshots. Serve para
+"deixe a nossa página igual a esta referência", conferir layout responsivo e
+medir quanto uma versão nova mudou. Versão fixada 0.3.0 (`versions.env`).
+
+- **Divisão com o REA:** binários, apps, Electron, APK, firmware e
+  decompilação → **REA** (já tem o Ghidra). Sites, tokens de design e
+  comparação visual → **craft-anything**. Para clicar e testar fluxos num
+  site, continue usando o **playwright**.
+- Fluxo no MCP: `list_toolsets` → `enable_toolset` (web) → `web_site_open`
+  → `web_site_capture` (`output_directory` no scratchpad ou `${TMPDIR}`, nunca
+  no repositório) → `web_site_close`. Para comparar, use `web_snapshots_compare`
+  ou `web_pixels_compare`. Cada comando do CLI abre e fecha o próprio
+  navegador, então a sequência só funciona dentro de uma sessão MCP.
+- `consent_required`: o servidor pede o OK do usuário para abrir o site ou
+  rodar código. Explique e peça. Não contorne com `--allow-run`.
+- Padrão é **Clean room**: só o que o visitante vê. **Deep** (`--deep`)
+  lê código e fontes do alvo; use só em software do usuário ou quando ele
+  pedir.
+- **`craft-anything-cli rebuild` só com pedido explícito.** Ele roda
+  `claude -p` em várias rodadas, o que gasta assinatura e memória e instala
+  dependências. O app de desktop não está instalado.
+- A skill própria do Craft Anything não foi instalada porque disputaria os
+  mesmos pedidos com a do REA.
+
 ## Gerenciadores de pacotes
 
 - JavaScript/TypeScript: **pnpm** (a não ser que o projeto já use npm, yarn ou
@@ -195,6 +223,7 @@ Use esta seção para responder "o que temos para X?" sem vasculhar o sistema.
 | Histórico de comandos                          | `atuin` (Ctrl+R; SQLite em `~/.atuin`; sincronização desligada)                                                                                             | binário, `~/.local/opt`                                       |
 | Testar/operar apps de desktop (E2E)            | `agent-desktop` (ver seção acima)                                                                                                                           | npm                                                           |
 | Entender vídeos (gravações de tela, tutoriais) | `vts-extract` + skill `/video-to-skill` (ver seção acima)                                                                                                   | fonte (cargo), `~/Library/Application Support/video-to-skill` |
+| Capturar/comparar sites (design, responsivo)   | `craft-anything-cli` / MCP `craft-anything` (ver seção acima)                                                                                               | binário, `~/.local/opt`                                       |
 | Compilar projetos CMake                        | `cmake`                                                                                                                                                     | `uv tool`                                                     |
 | Custo de uso do Claude Code                    | `ccusage daily` / `ccusage monthly`                                                                                                                         | npm                                                           |
 | Git                                            | 2.56 do brew (`/opt/homebrew/bin/git`); 2.39 do Xcode em `/usr/bin/git`                                                                                     | brew                                                          |
@@ -206,8 +235,8 @@ originais do sistema; os aliases `eza`/`bat` só valem no terminal do usuário.
 
 | Item                     | Situação                                                                                                                                     |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude Code              | MCPs: ai-memory, rea (pede aprovação: `ask`), playwright, context7; hooks Stop/Notification → `agent-notify`                                 |
-| Codex CLI 0.163          | MCPs: ai-memory, rea, playwright, context7 (OAuth); notificações `[tui]` via OSC 9 quando a aba não está em foco                             |
+| Claude Code              | MCPs: ai-memory, rea (pede aprovação: `ask`), playwright, context7, craft-anything; hooks Stop/Notification → `agent-notify`                 |
+| Codex CLI 0.163          | MCPs: ai-memory, rea, playwright, context7 (OAuth), craft-anything; notificações `[tui]` via OSC 9 quando a aba não está em foco             |
 | ai-memory 3.2.2          | memória compartilhada entre Claude e Codex; serviço LaunchAgent, web em http://127.0.0.1:49374/web                                           |
 | REA (`rea-agents@6.7.0`) | engenharia reversa via MCP; Ghidra 12.1.4 em `~/.local/opt/ghidra_12.1.4_PUBLIC` (natives mac_arm_64 compilados), Hopper em `~/Applications` |
 

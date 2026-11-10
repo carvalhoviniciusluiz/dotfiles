@@ -24,7 +24,7 @@ MACOS_TWEAKS=0
 ONLY=""
 
 STEPS=(preflight brew asdf links git npm uv binaries fonts zsh_plugins
-       apps sublime vscode iterm ghidra ai_memory skills video claude codex github)
+       apps sublime vscode iterm ghidra ai_memory skills video claude codex craft github)
 
 log()  { printf '\n\033[1;35m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
@@ -459,6 +459,26 @@ step_video() {
   # URLs e SHA-256 fixados no próprio vts-extract (veja: vts-extract check --print-downloads)
   "$bin" check --fix --yes >/dev/null || warn "dependências do vts-extract: rode 'vts-extract check --fix'"
   ok "vts-extract $VTS_VERSION + skill /video-to-skill"
+}
+
+step_craft() {
+  log "Craft Anything $CRAFT_ANYTHING_VERSION (capturar e comparar sites, recriar com agente)"
+  local v="$CRAFT_ANYTHING_VERSION" dest="$HOME/.local/opt/craft-anything-$CRAFT_ANYTHING_VERSION"
+  if ! "$dest/craft-anything-cli" --version >/dev/null 2>&1; then
+    fetch "https://github.com/storytold/craft-anything/releases/download/v$v/craft-anything-cli-$v-macos-universal.zip" \
+      "$WORK/craft.zip" "$CRAFT_ANYTHING_SHA256"
+    ditto -x -k "$WORK/craft.zip" "$WORK/craft"
+    mkdir -p "$dest"
+    cp -R "$WORK/craft/craft-anything-cli-$v-macos-universal/." "$dest/"
+  fi
+  codesign --verify --strict "$dest/craft-anything-cli" || die "assinatura do craft-anything-cli não confere"
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "$dest/craft-anything-cli" "$HOME/.local/bin/craft-anything-cli"
+  # MCP no Claude Code e no Codex. Sem a skill: ela concorre com a do REA
+  # (a divisão de uso está no AGENTS.md global)
+  "$dest/craft-anything-cli" --format text setup --yes --no-skill --client claude_code --client codex >/dev/null \
+    || warn "rode: craft-anything-cli setup --no-skill --client claude_code --client codex"
+  ok "craft-anything-cli $v + MCP craft-anything (Claude Code e Codex)"
 }
 
 step_github() {
