@@ -24,7 +24,7 @@ MACOS_TWEAKS=0
 ONLY=""
 
 STEPS=(preflight brew asdf links git npm uv binaries fonts zsh_plugins
-       apps sublime vscode iterm ghidra ai_memory skills video claude codex craft github)
+       apps sublime vscode iterm ghidra ai_memory skills video claude codex github)
 
 log()  { printf '\n\033[1;35m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
@@ -153,7 +153,22 @@ step_asdf() {
       ok "$tool $version"
     done
   done < "$HOME/.tool-versions"
+  install_rust_std_x86_64
   asdf reshim
+}
+
+# Alvo x86_64-apple-darwin na Rust do asdf, que não tem rustup: o rust-std oficial no mesmo rustlib.
+install_rust_std_x86_64() {
+  local version="$RUST_STD_X86_64_VERSION" prefix="$HOME/.asdf/installs/rust/$RUST_STD_X86_64_VERSION"
+  [[ -d "$prefix" ]] || { warn "rust $version ausente: alvo x86_64 não instalado"; return; }
+  if [[ -d "$prefix/lib/rustlib/x86_64-apple-darwin" ]]; then ok "rust-std x86_64 $version"; return; fi
+  local tmp; tmp=$(mktemp -d)
+  local file="rust-std-$version-x86_64-apple-darwin.tar.xz"
+  fetch "https://static.rust-lang.org/dist/$file" "$tmp/$file" "$RUST_STD_X86_64_SHA256"
+  tar -xJf "$tmp/$file" -C "$tmp"
+  "$tmp/rust-std-$version-x86_64-apple-darwin/install.sh" --prefix="$prefix" --disable-ldconfig >/dev/null
+  rm -rf "$tmp"
+  ok "rust-std x86_64 $version"
 }
 
 step_links() {
@@ -231,6 +246,15 @@ step_binaries() {
   install_bin atuin "$ATUIN_VERSION" \
     "https://github.com/atuinsh/atuin/releases/download/v$ATUIN_VERSION/atuin-aarch64-apple-darwin.tar.gz" \
     "$ATUIN_SHA256" atuin
+  install_bin ipsw "$IPSW_VERSION" \
+    "https://github.com/blacktop/ipsw/releases/download/v$IPSW_VERSION/ipsw_${IPSW_VERSION}_macOS_arm64.tar.gz" \
+    "$IPSW_SHA256" ipsw
+  install_bin ismc "$ISMC_VERSION" \
+    "https://github.com/dkorunic/iSMC/releases/download/v$ISMC_VERSION/iSMC_Darwin_all.tar.gz" \
+    "$ISMC_SHA256" iSMC
+  install_bin macmon "$MACMON_VERSION" \
+    "https://github.com/vladkens/macmon/releases/download/v$MACMON_VERSION/macmon-v$MACMON_VERSION.tar.gz" \
+    "$MACMON_SHA256" macmon
   # importa o histórico existente do zsh uma vez (sincronização fica desligada)
   if [[ ! -f "$HOME/.atuin/data/history.db" ]]; then
     "$HOME/.local/bin/atuin" import zsh >/dev/null 2>&1 || true
@@ -273,6 +297,18 @@ step_zsh_plugins() {
   clone_pinned zsh-users/zsh-syntax-highlighting "$ZSH_SYNTAX_HIGHLIGHTING_TAG" "$ZSH_SYNTAX_HIGHLIGHTING_COMMIT" "$base/zsh-syntax-highlighting"
 }
 
+# App distribuído em .dmg com assinatura ad hoc (sem notarização): o SHA-256 fixado é a garantia.
+install_app_dmg() {
+  local name="$1" url="$2" sha="$3" mnt
+  if [[ -d "/Applications/$name.app" ]]; then ok "$name já instalado"; return; fi
+  fetch "$url" "$WORK/$name.dmg" "$sha"
+  mnt="$(hdiutil attach -nobrowse -readonly "$WORK/$name.dmg" | awk -F'\t' '/\/Volumes\//{print $NF}')"
+  codesign --verify --deep --strict "$mnt/$name.app" || { hdiutil detach "$mnt" -quiet; die "assinatura inválida: $name"; }
+  ditto "$mnt/$name.app" "/Applications/$name.app"
+  hdiutil detach "$mnt" -quiet
+  ok "$name instalado"
+}
+
 step_apps() {
   log "Apps"
   install_app_zip "Sublime Text" "https://download.sublimetext.com/sublime_text_build_${SUBLIME_TEXT_BUILD}_mac.zip" "$SUBLIME_TEXT_SHA256"
@@ -281,6 +317,11 @@ step_apps() {
   ln -sf "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl" "$HOME/.local/bin/subl"
   ln -sf "/Applications/Sublime Merge.app/Contents/SharedSupport/bin/smerge" "$HOME/.local/bin/smerge"
   ok "subl e smerge no PATH"
+  install_app_dmg "Mister Download Manager" \
+    "https://github.com/anefzaoui/misterdownloadmanager/releases/download/v$MDM_VERSION/MisterDownloadManager-$MDM_VERSION-macos-arm64-experimental.dmg" \
+    "$MDM_SHA256"
+  ln -sf "/Applications/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager-cli" "$HOME/.local/bin/mdm"
+  ok "mdm (CLI do Mister Download Manager) no PATH"
   local app step
   for app in "iTerm:iterm" "Visual Studio Code:vscode"; do
     step="${app##*:}"; app="${app%%:*}"
@@ -388,8 +429,10 @@ step_claude() {
     claude mcp add --scope user playwright -- npx -y "@playwright/mcp@$PLAYWRIGHT_MCP_VERSION"
   claude mcp list 2>/dev/null | grep -q '^context7:' || \
     claude mcp add --scope user --transport http context7 "$CONTEXT7_MCP_URL"
+  claude mcp list 2>/dev/null | grep -q '^mister-download-manager:' || \
+    claude mcp add --scope user mister-download-manager -- "/Applications/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager-mcp"
   /usr/bin/python3 -I "$DOTFILES/claude/merge-settings.py" "$DOTFILES/claude/settings.patch.json"
-  ok "MCPs: rea (ask), playwright, context7 + hooks de notificação"
+  ok "MCPs: rea (ask), playwright, context7, mister-download-manager + hooks de notificação"
 }
 
 step_codex() {
@@ -404,10 +447,12 @@ step_codex() {
   codex mcp add playwright -- npx -y "@playwright/mcp@$PLAYWRIGHT_MCP_VERSION"
   grep -q '^\[mcp_servers.context7\]' "$HOME/.codex/config.toml" 2>/dev/null || \
     printf '\n[mcp_servers.context7]\nurl = "%s"\n' "$CONTEXT7_MCP_URL" >> "$HOME/.codex/config.toml"
+  codex mcp remove mister-download-manager >/dev/null 2>&1 || true
+  codex mcp add mister-download-manager -- "/Applications/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager-mcp"
   /usr/bin/python3 -I "$DOTFILES/codex/merge-config.py"
   link_home .local/bin/codex
   rea setup --skill-client codex --yes --json >/dev/null 2>&1 || warn "skill do REA: rode 'rea setup --skill-client codex --yes'"
-  ok "MCPs: rea, playwright, context7 + notificações [tui]"
+  ok "MCPs: rea, playwright, context7, mister-download-manager + notificações [tui]"
   warn "abra o Codex, rode /hooks e escolha 'Trust all' (hooks do ai-memory)"
 }
 
@@ -459,26 +504,6 @@ step_video() {
   # URLs e SHA-256 fixados no próprio vts-extract (veja: vts-extract check --print-downloads)
   "$bin" check --fix --yes >/dev/null || warn "dependências do vts-extract: rode 'vts-extract check --fix'"
   ok "vts-extract $VTS_VERSION + skill /video-to-skill"
-}
-
-step_craft() {
-  log "Craft Anything $CRAFT_ANYTHING_VERSION (capturar e comparar sites, recriar com agente)"
-  local v="$CRAFT_ANYTHING_VERSION" dest="$HOME/.local/opt/craft-anything-$CRAFT_ANYTHING_VERSION"
-  if ! "$dest/craft-anything-cli" --version >/dev/null 2>&1; then
-    fetch "https://github.com/storytold/craft-anything/releases/download/v$v/craft-anything-cli-$v-macos-universal.zip" \
-      "$WORK/craft.zip" "$CRAFT_ANYTHING_SHA256"
-    ditto -x -k "$WORK/craft.zip" "$WORK/craft"
-    mkdir -p "$dest"
-    cp -R "$WORK/craft/craft-anything-cli-$v-macos-universal/." "$dest/"
-  fi
-  codesign --verify --strict "$dest/craft-anything-cli" || die "assinatura do craft-anything-cli não confere"
-  mkdir -p "$HOME/.local/bin"
-  ln -sf "$dest/craft-anything-cli" "$HOME/.local/bin/craft-anything-cli"
-  # MCP no Claude Code e no Codex. Sem a skill: ela concorre com a do REA
-  # (a divisão de uso está no AGENTS.md global)
-  "$dest/craft-anything-cli" --format text setup --yes --no-skill --client claude_code --client codex >/dev/null \
-    || warn "rode: craft-anything-cli setup --no-skill --client claude_code --client codex"
-  ok "craft-anything-cli $v + MCP craft-anything (Claude Code e Codex)"
 }
 
 step_github() {
