@@ -4,6 +4,14 @@ Instruções globais para agentes de código neste computador (lidas pelo Codex 
 via `~/.claude/CLAUDE.md`, pelo Claude Code). As regras de cada repositório
 (AGENTS.md / CLAUDE.md do projeto) têm prioridade sobre este arquivo.
 
+## Protocolos desta máquina: leia antes de agir
+
+| Antes de…                                                                                                                                                                                        | Siga                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **instalar, atualizar ou remover** qualquer coisa fora das dependências do projeto (programa, linguagem, pacote global, MCP, skill, serviço, alias, PATH, helper de projeto fora do repositório) | `~/Development/dotfiles/docs/protocolo-de-instalacao.md`. Quem executa é o agente instalador `INSTALADOR_MACOS`. Skill `machine-installs` |
+| **atualizar versões** (o instalador conduz)                                                                                                                                                      | `~/Development/dotfiles/docs/protocolo-de-atualizacao.md` e `updates-check`                                                               |
+| **decidir onde pôr** arquivos, atalhos, insumos, relatórios e temporários                                                                                                                        | Seção "Organização" abaixo                                                                                                                |
+
 ## Idioma
 
 - Responda ao usuário em português do Brasil.
@@ -27,16 +35,24 @@ via `~/.claude/CLAUDE.md`, pelo Claude Code). As regras de cada repositório
   máquina. Antes de instalar, compilar para instalar, baixar e deixar na
   máquina, ou registrar qualquer ferramenta, helper, programa, app, MCP,
   skill, serviço ou atalho fora da pasta de trabalho do projeto, mande a
-  consulta pelo `SendMessage` (encontre a sessão com `ListAgents`). Inclua:
-  - o que é e para que serve;
-  - qual projeto usa;
-  - de onde vem (versão, link, checksum);
-  - onde pretende pôr e como remover.
+  consulta pelo `SendMessage` (encontre a sessão com `ListAgents`), com a
+  ficha do `docs/protocolo-de-instalacao.md` (seção 3): o que é e para que
+  serve, qual projeto usa, de onde vem (versão, link, checksum), onde
+  pretende pôr e como remover. Atualizações e remoções também passam por
+  ele.
 
   O instalador decide se é global (vale para a máquina toda e entra no
-  dotfiles) ou do projeto, e nesse caso diz onde e como instalar ou compilar
-  sem afetar o resto do computador. Espere a resposta antes de instalar.
-  Sem o instalador disponível, pergunte ao usuário.
+  dotfiles) ou do projeto. Nesse caso, ele diz onde e como instalar ou
+  compilar sem afetar o resto do computador. Espere a resposta antes de
+  instalar.
+
+  **Se o instalador não estiver ativo:**
+  1. grave a ficha em `~/.local/share/instalador/fila/`;
+  2. peça ao usuário que o ative, retomando a sessão com `agents-restore` ou
+     abrindo uma nova com o prompt da seção 6 do protocolo;
+  3. siga com o que não depende da instalação.
+
+  Nunca reabra sessões por conta própria nem instale por fora.
 
 - Não precisam de consulta as dependências dentro do projeto, que o
   gerenciador de pacotes dele já controla (`node_modules`, `.venv`,

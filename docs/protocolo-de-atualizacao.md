@@ -54,7 +54,7 @@ de cada programa. Não instala nada.
 **Dependências a procurar:**
 
 - Projetos: `.tool-versions`, `.nvmrc`, `.node-version`, `.python-version`,
-  `rust-toolchain*` em `~/Development` (hoje: `sei-estudo` fixa PHP 7.3.33).
+  `rust-toolchain*` em `~/Development`. O registro do instalador (`~/.local/share/instalador/registro.md`) lista os casos conhecidos.
 - Ferramentas presas a uma versão de linguagem:
   - os `uv tool` usam o Python do asdf em que foram instalados (veja
     `readlink ~/.local/share/uv/tools/*/bin/python`);
