@@ -22,6 +22,26 @@ via `~/.claude/CLAUDE.md`, pelo Claude Code). As regras de cada repositório
 
 ## Regras de instalação
 
+- **Toda instalação passa pelo agente instalador.** Por decisão do usuário,
+  a sessão **`INSTALADOR_MACOS`** é a responsável pelas instalações nesta
+  máquina. Antes de instalar, compilar para instalar, baixar e deixar na
+  máquina, ou registrar qualquer ferramenta, helper, programa, app, MCP,
+  skill, serviço ou atalho fora da pasta de trabalho do projeto, mande a
+  consulta pelo `SendMessage` (encontre a sessão com `ListAgents`). Inclua:
+  - o que é e para que serve;
+  - qual projeto usa;
+  - de onde vem (versão, link, checksum);
+  - onde pretende pôr e como remover.
+
+  O instalador decide se é global (vale para a máquina toda e entra no
+  dotfiles) ou do projeto, e nesse caso diz onde e como instalar ou compilar
+  sem afetar o resto do computador. Espere a resposta antes de instalar.
+  Sem o instalador disponível, pergunte ao usuário.
+
+- Não precisam de consulta as dependências dentro do projeto, que o
+  gerenciador de pacotes dele já controla (`node_modules`, `.venv`,
+  `.build/`, `target/`, `Cargo.lock`, `uv.lock` etc.), nem os temporários no
+  scratchpad.
 - Ordem de preferência: `asdf plugin add` + `asdf install` → binário oficial do
   GitHub em `~/.local/opt/<nome>-<versão>` com link em `~/.local/bin` (conferir
   SHA-256) → `npm i -g` / `uv tool install` → brew (só com permissão).
@@ -347,7 +367,7 @@ originais do sistema; os aliases `eza`/`bat` só valem no terminal do usuário.
 | Item                     | Situação                                                                                                                                     |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Claude Code              | MCPs: ai-memory, rea (pede aprovação: `ask`), playwright, context7, mister-download-manager; hooks Stop/Notification → `agent-notify`        |
-| Codex CLI 0.163          | MCPs: ai-memory, rea, playwright, context7 (OAuth), mister-download-manager; notificações `[tui]` via OSC 9 quando a aba não está em foco    |
+| Codex CLI 0.165          | MCPs: ai-memory, rea, playwright, context7 (OAuth), mister-download-manager; notificações `[tui]` via OSC 9 quando a aba não está em foco    |
 | ai-memory 3.2.2          | memória compartilhada entre Claude e Codex; serviço LaunchAgent, web em http://127.0.0.1:49374/web                                           |
 | REA (`rea-agents@6.7.0`) | engenharia reversa via MCP; Ghidra 12.1.4 em `~/.local/opt/ghidra_12.1.4_PUBLIC` (natives mac_arm_64 compilados), Hopper em `~/Applications` |
 
