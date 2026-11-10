@@ -37,6 +37,8 @@ format = '( [\[$all_status$ahead_behind\]]($style))'
 style = "bold orange"
 
 [nodejs]
+# Só projetos com package.json/.nvmrc etc.: um .js solto não deve rodar node a cada prompt.
+detect_extensions = []
 format = ' via [$symbol($version)]($style)'
 symbol = " "
 style = "green"
@@ -47,11 +49,15 @@ symbol = " "
 style = "yellow"
 
 [java]
+# Só projetos Maven/Gradle/SBT: um .java solto não deve iniciar a JVM (~250 ms) a cada prompt.
+detect_extensions = []
 format = ' via [${symbol}(${version})]($style)'
 symbol = " "
 style = "red"
 
 [rust]
+# Só projetos Cargo: um .rs solto (ex.: em ~/Development) não deve rodar rustc a cada prompt.
+detect_extensions = []
 format = ' via [$symbol($version)]($style)'
 symbol = " "
 style = "orange"
