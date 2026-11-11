@@ -1,16 +1,34 @@
 #!/usr/bin/env bash
 # dk — liga e desliga o Docker Desktop sob demanda (ele não inicia com o sistema).
-#   dk up      abre o Docker e espera o daemon responder (até 120s)
-#   dk down    fecha o Docker Desktop e libera a memória
+#   dk up      abre o Docker e espera o daemon responder (até 120s); reinicia se estiver meio aberto
+#   dk down    fecha o Docker Desktop, espera os processos de fundo saírem e libera a memória
 #   dk status  saída 0 se o daemon responde
 set -uo pipefail
 
-ready() { docker info >/dev/null 2>&1; }
+# docker info pode travar quando o Docker está meio aberto: limite de 5 s.
+ready() { perl -e 'alarm 5; exec @ARGV' docker info >/dev/null 2>&1; }
+backend_alive() { pgrep -f 'Docker.app/Contents/MacOS/com.docker.backend' >/dev/null 2>&1; }
+
+stop_all() {
+  osascript -e 'quit app "Docker"' >/dev/null 2>&1 || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1
+  for _ in $(seq 1 30); do backend_alive || return 0; sleep 1; done
+  # Ficou pendurado: encerra os processos do Docker Desktop (só do usuário).
+  pkill -f 'Docker.app/Contents/MacOS/Docker Desktop' 2>/dev/null
+  pkill -f 'Docker.app/Contents/MacOS/com.docker' 2>/dev/null
+  for _ in $(seq 1 10); do backend_alive || return 0; sleep 1; done
+  return 1
+}
 
 case "${1:-status}" in
   up)
     if ready; then echo "dk: Docker já está pronto"; exit 0; fi
     [[ -d /Applications/Docker.app ]] || { echo "dk: Docker Desktop não instalado" >&2; exit 1; }
+    if backend_alive; then
+      # Meio aberto (sobra de um fechamento incompleto ou ainda subindo): espera um pouco e, se não responder, reinicia.
+      for _ in $(seq 1 20); do ready && { echo "dk: Docker pronto"; exit 0; }; sleep 1; done
+      echo "dk: Docker não responde; reiniciando"
+      stop_all || { echo "dk: não consegui fechar o Docker; feche pelo ícone da barra de menu" >&2; exit 1; }
+    fi
     open -g -a Docker
     for i in $(seq 1 120); do
       if ready; then echo "dk: Docker pronto (${i}s)"; exit 0; fi
@@ -18,14 +36,14 @@ case "${1:-status}" in
     done
     echo "dk: o Docker não respondeu em 120s" >&2; exit 1 ;;
   down)
-    if [[ -n "$(docker ps -q 2>/dev/null)" ]]; then
-      echo "dk: contêineres em execução serão encerrados:"; docker ps --format '  - {{.Names}} ({{.Image}})'
+    if ready && [[ -n "$(perl -e 'alarm 5; exec @ARGV' docker ps -q 2>/dev/null)" ]]; then
+      echo "dk: contêineres em execução serão encerrados:"; perl -e 'alarm 5; exec @ARGV' docker ps --format '  - {{.Names}} ({{.Image}})'
     fi
-    osascript -e 'quit app "Docker"' >/dev/null 2>&1 || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1
-    for _ in $(seq 1 30); do ready || { echo "dk: Docker encerrado"; exit 0; }; sleep 1; done
-    echo "dk: o Docker ainda responde; feche pelo ícone da barra de menu" >&2; exit 1 ;;
+    if stop_all; then echo "dk: Docker encerrado"; exit 0; fi
+    echo "dk: o Docker não fechou; feche pelo ícone da barra de menu" >&2; exit 1 ;;
   status)
-    if ready; then echo "dk: rodando ($(docker ps -q | wc -l | tr -d ' ') contêiner(es))"; else echo "dk: parado (use: dk up)"; exit 1; fi ;;
+    if ready; then echo "dk: rodando ($(perl -e 'alarm 5; exec @ARGV' docker ps -q | wc -l | tr -d ' ') contêiner(es))"; else
+      if backend_alive; then echo "dk: meio aberto (processo vivo, sem resposta); use: dk up"; else echo "dk: parado (use: dk up)"; fi; exit 1; fi ;;
   -h|--help) sed -n '2,5p' "$0" ;;
   *) echo "dk: use up | down | status" >&2; exit 1 ;;
 esac
