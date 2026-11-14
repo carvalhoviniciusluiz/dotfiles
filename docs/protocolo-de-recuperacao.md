@@ -189,6 +189,63 @@ dias. Vale a mesma conta.
 Avise o usuário com a data. Ele pode comprar créditos (`/usage-credits`) ou
 esperar.
 
+### 2.6 Relatório de reset (para calibrar este protocolo)
+
+Regra do usuário (2026-11-14). Toda virada de janela fica registrada. Com
+os registros, o usuário avalia se os limites do protocolo (85%, 90%, 97%
+e 30 minutos) podem melhorar.
+
+**Parte automática.** O `agent-usage` faz sozinho, sem depender do
+agente:
+
+- detecta a virada da janela (mudou o `resets_at`);
+- grava em `~/.local/share/agent-usage/resets.jsonl`: uso final, pico e
+  **todas as amostras** da janela (hora e uso, a cada 30 s no máximo).
+
+Com as amostras dá para recalcular depois o ritmo, a projeção que existia
+em cada momento e quanto tempo se passou em cada modo.
+
+**Parte do agente principal.** Na primeira ação depois do reset, o hook
+pede o relatório. O agente principal (coordenador, TL ou braço direito)
+registra **na hora**:
+
+```sh
+agent-usage reset-report --projeto <nome> \
+  --decisao normal|atencao|travessia|pausa \
+  --agentes <N agentes ativos no reset, sem contar você> \
+  --tarefa 'id|papel|complexidade|modelo|estado|nota' \
+  --houve-429 sim|nao \
+  --obs '<o que observou>'
+```
+
+- `--tarefa` vai uma vez por agente ativo. A ferramenta recusa se o número
+  de tarefas não bater com `--agentes`.
+- `estado` é o que aconteceu com o agente no reset:
+  `seguiu|pausou|morreu|terminou`.
+- `--obs` responde: a decisão foi certa? A pausa ou a travessia valeu a
+  pena? O que teria sido melhor?
+- A sessão (nome e id) é capturada sozinha.
+- Escreva também uma linha no log do projeto, com o mesmo resumo.
+
+**Complexidade** (escolha a que mais se aproxima):
+
+| Valor   | Quando                                                                                                                                      |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baixa` | leitura, conferência ou ajuste curto; poucos passos; até ~50 mil tokens                                                                     |
+| `media` | uma unidade de trabalho com vários passos (um sublote, um ajuste de regras, um debrief); ~50 a 150 mil tokens                               |
+| `alta`  | trabalho longo ou pesado (observação no sistema rodando, revisão de domínio inteira, compilação); mais de ~150 mil tokens ou mais de 1 hora |
+
+**Análise:**
+
+- `agent-usage resets` mostra uma linha por reset (janela, uso final,
+  pico, relatórios); `--json` traz os dados completos.
+- A revisão dos limites é decisão do usuário. O braço direito pode propor
+  com base nos registros, por exemplo quantas travessias chegaram perto de
+  100% e quantas pausas foram à toa.
+
+Isto **NÃO** significa parar o trabalho para escrever o relatório no meio
+de um passo. Termine o passo em andamento e registre logo em seguida.
+
 ### 2.5 Mac acordado
 
 O lembrete e a continuação automática só funcionam com o Claude Code

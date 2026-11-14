@@ -7,6 +7,12 @@
 #                        3 sem dado, 4 TRAVESSIA (perto do teto, reset perto)
 #   agent-usage hook     para hooks (UserPromptSubmit/PostToolUse): avisa o
 #                        agente com frequência maior quanto mais perto do teto
+#                        e, na virada da janela, pede o relatório de reset
+#   agent-usage reset-report …  o agente principal registra o relatório de
+#                        reset (agentes ativos, tarefas, complexidade, decisão)
+#   agent-usage resets [--json]  lista os resets registrados, para análise
+# Registros de reset: ~/.local/share/agent-usage/resets.jsonl (automático na
+# virada + relatório do agente). Protocolo §2.6.
 # Modos (protocolo-de-recuperacao.md §2):
 #   PAUSAR     uso >= 97%; ou uso >= 90% e o reset não está perto
 #   TRAVESSIA  uso >= 85%, reset em até 30 min e projeção no reset < 97%
@@ -19,11 +25,13 @@ set -uo pipefail
 state="${AGENT_USAGE_DIR:-$HOME/.local/state/agent-usage}"
 file="$state/usage.json"
 hist="$state/history.tsv"
+data="${AGENT_USAGE_DATA:-$HOME/.local/share/agent-usage}"
+resets="$data/resets.jsonl"
 readonly WARN_AT=70 PAUSE_AT=90 NEAR_AT=85 HARD_AT=97
 readonly SOON_MIN=30 SOON_NO_RATE_MIN=15 RATE_WINDOW_MIN=30 STALE_AFTER=900
 now="${AGENT_USAGE_NOW:-$(date +%s)}"
 
-usage() { sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
 
 json_get() { jq -r "$1 // empty" 2>/dev/null; }
 
@@ -36,6 +44,22 @@ hhmm() { # epoch -> "17:50" (hoje) ou "sáb 00:00"
   if [[ "$(date -r "$1" +%F)" == "$(date -r "$now" +%F)" ]]; then date -r "$1" +%H:%M; else date -r "$1" '+%a %H:%M'; fi
 }
 
+# Virada de janela: quando o resets_at muda, grava o fechamento da janela
+# anterior (uso final, pico e todas as amostras dela) em resets.jsonl.
+rollover() { # nome coluna novo_reset campo_reset campo_pct
+  local name="$1" col="$2" new="$3" old oldpct
+  [[ -f "$file" && -n "$new" ]] || return 0
+  old="$(json_get "$4" <"$file")"; oldpct="$(json_get "$5" <"$file")"
+  [[ -n "$old" && "$old" != "$new" && "$new" -gt "$old" ]] || return 0
+  mkdir -p "$data" 2>/dev/null || return 0
+  awk -F'\t' -v c="$col" -v r="$old" '$(c+1) == r && $c != "-" { printf "%s[%s,%s]", (n++ ? "," : ""), $1, $c }' "$hist" 2>/dev/null >"$state/samples.$$"
+  jq -cn --arg w "$name" --argjson r "$old" --argjson now "$now" --argjson pct "${oldpct:-null}" \
+    --argjson s "[$(cat "$state/samples.$$" 2>/dev/null)]" \
+    '{type:"auto", window:$w, reset_at:$r, detected_at:$now, final_pct:$pct,
+      peak_pct:([$s[][1]] | max), samples:$s}' >>"$resets" 2>/dev/null
+  rm -f "$state/samples.$$"
+}
+
 record() {
   local input five fiver week weekr last
   input="$(cat 2>/dev/null || true)"
@@ -45,14 +69,16 @@ record() {
   weekr="$(int "$(printf '%s' "$input" | json_get .rate_limits.seven_day.resets_at)")"
   [[ -z "$five$week" ]] && return 0
   mkdir -p "$state" 2>/dev/null || return 0
+  rollover "5h" 2 "$fiver" .five_reset .five
+  rollover "semana" 4 "$weekr" .week_reset .week
   printf '{"five":%s,"five_reset":%s,"week":%s,"week_reset":%s,"ts":%s}\n' \
     "${five:-null}" "${fiver:-null}" "${week:-null}" "${weekr:-null}" "$now" >"$file.$$" 2>/dev/null &&
     mv -f "$file.$$" "$file" 2>/dev/null
-  # Histórico: uma amostra a cada 30 s no máximo; guarda só as últimas 3 h.
+  # Histórico: uma amostra a cada 30 s no máximo; guarda só as últimas 6 h.
   last="$(tail -1 "$hist" 2>/dev/null | cut -f1)"
   if [[ -z "$last" || $((now - last)) -ge 30 ]]; then
     printf '%s\t%s\t%s\t%s\t%s\n' "$now" "${five:--}" "${fiver:--}" "${week:--}" "${weekr:--}" >>"$hist"
-    awk -F'\t' -v min=$((now - 10800)) '$1 >= min' "$hist" >"$hist.$$" 2>/dev/null && mv -f "$hist.$$" "$hist"
+    awk -F'\t' -v min=$((now - 21600)) '$1 >= min' "$hist" >"$hist.$$" 2>/dev/null && mv -f "$hist.$$" "$hist"
   fi
   return 0
 }
@@ -158,6 +184,26 @@ hook() {
   [[ "$key" == "-" ]] && exit 0
   decide
 
+  # Virada da janela de 5 h: pede ao agente principal (não a subagentes) o
+  # relatório de reset, uma vez por sessão e por janela.
+  local sid aid seen_f seen
+  sid="$(printf '%s' "$input" | json_get .session_id)"; aid="$(printf '%s' "$input" | json_get .agent_id)"
+  if [[ -n "$sid" && -z "$aid" && -n "$five_reset" ]]; then
+    seen_f="$state/seen-$sid"; seen="$(cat "$seen_f" 2>/dev/null)"
+    if [[ -n "$seen" && "$now" -ge "$seen" && ! -f "$state/asked-$sid-$seen" ]]; then
+      : >"$state/asked-$sid-$seen"
+      local fpct; fpct="$(json_get .five <"$file")"
+      [[ "$five_reset" == "$seen" ]] || fpct="$(tail -1 "$data/resets.jsonl" 2>/dev/null | jq -r 'select(.reset_at == '"$seen"') | .final_pct // empty' 2>/dev/null)"
+      msg="RESET DA JANELA DE 5 H ($(hhmm "$seen")): a janela fechou em ${fpct:-?}%. Registre AGORA o relatório de reset (protocolo-de-recuperacao.md §2.6): agent-usage reset-report --projeto <nome> --decisao normal|atencao|travessia|pausa --agentes <N> --tarefa 'id|papel|complexidade|modelo|estado|nota' (uma por agente ativo) --houve-429 sim|nao --obs '<o que observou>', e uma linha no log do projeto."
+      if [[ "$event" == "PostToolUse" ]]; then
+        jq -cn --arg m "$msg" '{hookSpecificOutput:{hookEventName:"PostToolUse",additionalContext:$m}}'
+      else echo "$msg"; fi
+      printf '%s\n' "$five_reset" >"$seen_f"
+      exit 0
+    fi
+    printf '%s\n' "$five_reset" >"$seen_f"
+  fi
+
   # Quanto mais perto do teto, mais frequente o aviso.
   case "$mode" in
     5) interval=0 ;; 4) interval=180 ;; 3) interval=180 ;; 2) interval=600 ;; 1) interval=1800 ;; *) exit 0 ;;
@@ -190,10 +236,73 @@ hook() {
   exit 0
 }
 
+
+session_identity() { # define sess_id sess_name
+  sess_id="${CLAUDE_CODE_SESSION_ID:-}" sess_name=""
+  [[ -z "$sess_id" ]] && return
+  local f; f="$(grep -l "\"sessionId\":\"$sess_id\"" "$HOME"/.claude/sessions/*.json 2>/dev/null | head -1)"
+  [[ -n "$f" ]] && sess_name="$(jq -r '.name // empty' "$f" 2>/dev/null)"
+}
+
+reset_report() {
+  local projeto="" decisao="" agentes="" h429="" obs="" reset="" tarefas=() t
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --projeto) projeto="${2:-}"; shift 2 ;;
+      --decisao) decisao="${2:-}"; shift 2 ;;
+      --agentes) agentes="${2:-}"; shift 2 ;;
+      --tarefa) tarefas+=("${2:-}"); shift 2 ;;
+      --houve-429) h429="${2:-}"; shift 2 ;;
+      --obs) obs="${2:-}"; shift 2 ;;
+      --reset) reset="${2:-}"; shift 2 ;;
+      *) echo "opção desconhecida: $1" >&2; exit 64 ;;
+    esac
+  done
+  local err=""
+  [[ -n "$projeto" ]] || err="--projeto obrigatório"
+  [[ "$decisao" =~ ^(normal|atencao|travessia|pausa)$ ]] || err="--decisao normal|atencao|travessia|pausa"
+  [[ "$agentes" =~ ^[0-9]+$ ]] || err="--agentes <número de agentes ativos no reset, sem contar você>"
+  [[ "$h429" =~ ^(sim|nao)$ ]] || err="--houve-429 sim|nao"
+  [[ "${#tarefas[@]}" -eq "${agentes:-0}" ]] || err="uma --tarefa por agente ativo (${#tarefas[@]} tarefas para ${agentes:-?} agentes)"
+  for t in ${tarefas[@]+"${tarefas[@]}"}; do
+    IFS='|' read -r _ _ cx _ st _ <<<"$t"
+    [[ "$cx" =~ ^(baixa|media|alta)$ ]] || err="complexidade baixa|media|alta em: $t"
+    [[ "$st" =~ ^(seguiu|pausou|morreu|terminou)$ ]] || err="estado seguiu|pausou|morreu|terminou em: $t"
+  done
+  [[ -z "$err" ]] || { echo "reset-report: $err" >&2; exit 64; }
+  if [[ -z "$reset" ]]; then
+    load || true
+    if [[ -n "$five_reset" && "$now" -ge "$five_reset" ]]; then reset="$five_reset"
+    else reset="$(jq -r 'select(.type=="auto" and .window=="5h") | .reset_at' "$resets" 2>/dev/null | tail -1)"; fi
+  fi
+  session_identity
+  mkdir -p "$data"
+  { [[ "${#tarefas[@]}" -gt 0 ]] && printf '%s\n' "${tarefas[@]}"; } | jq -R 'split("|") | {id:.[0], papel:.[1], complexidade:.[2], modelo:.[3], estado:.[4], nota:(.[5] // "")}' |
+    jq -cs --arg p "$projeto" --arg d "$decisao" --argjson n "$agentes" --arg h "$h429" --arg o "$obs" \
+      --arg sid "$sess_id" --arg sn "$sess_name" --argjson now "$now" --argjson r "${reset:-null}" \
+      '{type:"report", reset_at:$r, reported_at:$now, session_id:$sid, session_name:$sn, projeto:$p,
+        decisao:$d, agentes_ativos:$n, tarefas:., houve_429:($h=="sim"), obs:$o}' >>"$resets"
+  echo "relatório de reset gravado ($(hhmm "${reset:-$now}"), $agentes agentes) em $resets"
+}
+
+list_resets() {
+  [[ -f "$resets" ]] || { echo "nenhum reset registrado ainda"; return; }
+  if [[ "${1:-}" == "--json" ]]; then cat "$resets"; return; fi
+  jq -rs 'map(.reset_at //= .reported_at) | group_by(.reset_at)[] | . as $g |
+    ($g | map(select(.type=="auto")) | first) as $a |
+    ($g | map(select(.type=="report"))) as $rs |
+    [ ($g[0].reset_at | strflocaltime("%Y-%m-%d %H:%M")), ($a.window // "?"),
+      ($a.final_pct // "?" | tostring), ($a.peak_pct // "?" | tostring),
+      ($rs | map(.projeto + ":" + .decisao + ":" + (.agentes_ativos|tostring) + " agentes" + (if .houve_429 then ":429" else "" end)) | join("; ")) ]
+    | @tsv' "$resets" | (printf 'reset\tjanela\tfinal%%\tpico%%\trelatórios\n'; cat) | column -t -s $'\t'
+}
+
 case "${1:-}" in
   record) record ;;
   status) shift; status "$@" ;;
   hook) hook ;;
+  reset-report) shift; reset_report "$@" ;;
+  resets) shift; list_resets "$@" ;;
   -h | --help | "") usage ;;
   *) usage; exit 64 ;;
 esac
