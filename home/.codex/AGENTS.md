@@ -11,6 +11,7 @@ via `~/.claude/CLAUDE.md`, pelo Claude Code). As regras de cada repositório
 | **instalar, atualizar ou remover** qualquer coisa fora das dependências do projeto (programa, linguagem, pacote global, MCP, skill, serviço, alias, PATH, helper de projeto fora do repositório) | `~/Development/dotfiles/docs/protocolo-de-instalacao.md`. Quem executa é o agente instalador `3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`. Skill `machine-installs` |
 | **atualizar versões** (o instalador conduz)                                                                                                                                                      | `~/Development/dotfiles/docs/protocolo-de-atualizacao.md` e `updates-check`                                                                                   |
 | **retomar depois de uma parada abrupta** (limite de uso, erro da API, Mac travado) ou **pausar perto do limite**                                                                                 | `~/Development/dotfiles/docs/protocolo-de-recuperacao.md`: conferir com prova antes de agir; ponto de retomada em arquivo                                     |
+| **um agente causou um dano** (derrubou apps, sessões ou serviços; apagou ou mudou algo por engano)                                                                                               | `~/Development/dotfiles/docs/protocolo-de-incidentes.md`: conter, avaliar, registrar, prevenir, revisar com o usuário                                         |
 | **decidir onde pôr** arquivos, atalhos, insumos, relatórios e temporários                                                                                                                        | Seção "Organização" abaixo                                                                                                                                    |
 
 ## Idioma
@@ -594,6 +595,7 @@ Microsoft AutoUpdate, DockerHelper. Spotlight ignora `~/.asdf` e `~/.local`.
 
 ## Git e segurança
 
+- **Nunca mate processos por nome ou em massa** (`pkill`, `killall`, `kill 0`, `kill -1`, `| xargs kill`). Encerre só o PID que você mesmo iniciou (`kill <PID>`, `kill $!`, `bgrun stop`). O hook `agent-guard-kill` barra o resto (incidente de 2026-11-14).
 - Não faça commit, push, merge ou force-push sem pedido explícito.
 - Nunca inclua segredos (tokens, senhas, chaves, `.env`) em commits; rode
   `gitleaks git --staged` antes de commitar quando houver dúvida.

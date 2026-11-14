@@ -1,0 +1,109 @@
+#!/usr/bin/python3 -I
+"""Hook PreToolUse (Bash) do Claude Code: barra comandos que matam processos
+por nome ou em massa. Vale para o agente principal e para os subagentes.
+
+Barrado:
+  - pkill e killall (sempre: escolhem processos por nome; no macOS, opções
+    depois do padrão viram padrões, e `-f` procura na linha de comando
+    inteira de todos os processos);
+  - kill com alvo que não seja um PID conhecido: 0, -1, grupo (-<n>),
+    substituição de comando ($(...) ou `...`) ou entrada de outro comando
+    (`| xargs kill`).
+Permitido: kill [-sinal] <PID> … com números >= 2, $! ou uma variável simples
+($pid, ${PID}) — o PID de um processo que o próprio agente iniciou.
+
+Protocolo: ~/Development/dotfiles/docs/protocolo-de-incidentes.md.
+"""
+import json
+import re
+import shlex
+import sys
+
+REASON = (
+    "Bloqueado: matar processos por nome ou em massa (pkill, killall, kill sem PID "
+    "próprio) derrubou apps e sessões em 2026-11-14. Encerre só o PID que você mesmo "
+    "iniciou (kill <PID> ou kill $!), ou peça ao usuário. Protocolo de incidentes."
+)
+
+PID_OK = re.compile(r"^(\$!|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\}|[2-9]|[1-9][0-9]+)$")
+SIGNAL = re.compile(r"^-(\d+|[A-Z][A-Z0-9]*|SIG[A-Z0-9]+)$")
+
+
+def segments(command):
+    # Divide por ; && || | e quebras de linha, preservando aspas.
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
+    lexer.whitespace_split = True
+    seg, prev = [], None
+    try:
+        for tok in lexer:
+            if tok and set(tok) <= set(";&|\n"):
+                yield seg, prev
+                prev, seg = tok, []
+            else:
+                seg.append(tok)
+    except ValueError:
+        yield [command], None
+        return
+    yield seg, prev
+
+
+def blocked(command):
+    for seg, before in segments(command):
+        words = [w for w in seg if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", w)]
+        # Pula prefixos comuns (sudo, nohup, command, builtin, exec, timeout N).
+        while words and words[0] in ("sudo", "nohup", "command", "builtin", "exec", "xargs", "env"):
+            words = words[1:]
+            if before == "|":
+                before = "|xargs"
+        if not words:
+            continue
+        cmd = words[0].rsplit("/", 1)[-1]
+        if cmd in ("pkill", "killall"):
+            return True
+        if cmd in ("sh", "bash", "zsh") and "-c" in words:
+            i = words.index("-c")
+            if i + 1 < len(words) and blocked(words[i + 1]):
+                return True
+            continue
+        if cmd != "kill":
+            continue
+        if before and "|" in before:
+            return True  # alvo vem de outro comando
+        args = words[1:]
+        if args and args[0] == "-s" and len(args) > 1:
+            args = args[2:]
+        elif args and (SIGNAL.match(args[0]) or args[0] in ("-l", "-L")):
+            if args[0] in ("-l", "-L"):
+                continue  # só lista sinais
+            args = args[1:]
+        if args and args[0] == "--":
+            args = args[1:]
+        if not args:
+            return True
+        for a in args:
+            if "$(" in a or "`" in a or not PID_OK.match(a):
+                return True
+    return False
+
+
+def main():
+    try:
+        data = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    if data.get("tool_name") != "Bash":
+        return 0
+    command = (data.get("tool_input") or {}).get("command") or ""
+    if "kill" not in command:
+        return 0
+    if blocked(command):
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": REASON,
+        }}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

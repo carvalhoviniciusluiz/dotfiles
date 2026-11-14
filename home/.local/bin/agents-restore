@@ -63,11 +63,12 @@ def claude_sessions(since):
             continue
         if mtime < since:
             continue
-        sid = cwd = title = first = last = None
+        sid = cwd = title = first = last = name = None
         sidechain_only = True
         with f.open(errors="replace") as fh:
             for line in fh:
-                if '"cwd"' not in line and '"aiTitle"' not in line and '"lastPrompt"' not in line:
+                if ('"cwd"' not in line and '"aiTitle"' not in line and '"lastPrompt"' not in line
+                        and '"customTitle"' not in line and '"agentName"' not in line):
                     continue
                 try:
                     d = json.loads(line)
@@ -75,6 +76,11 @@ def claude_sessions(since):
                     continue
                 if d.get("aiTitle"):
                     title = d["aiTitle"]
+                # Nome dado com /rename (o mais recente vale).
+                if d.get("customTitle"):
+                    name = d["customTitle"]
+                elif d.get("agentName"):
+                    name = d["agentName"]
                 if d.get("type") == "last-prompt" and d.get("lastPrompt"):
                     last = d["lastPrompt"]
                 if d.get("cwd") and not cwd:
@@ -91,6 +97,7 @@ def claude_sessions(since):
         out.append({
             "agent": "claude", "id": sid, "cwd": cwd, "mtime": mtime,
             "title": title or first or "(sem título)", "last": last or first or "",
+            "name": name,
         })
     return out
 
@@ -206,15 +213,18 @@ def print_table(sessions, full_id, detail):
         width = os.get_terminal_size().columns
     except OSError:
         width = 140
-    print(f"{'#':>2}  {'agente':6}  {'id':{idw}}  {'quando':11}  {'projeto':32}  assunto")
+    nw = max([len(s.get("name") or "") for s in sessions] + [4])
+    nw = min(nw, 32)
+    print(f"{'#':>2}  {'agente':6}  {'id':{idw}}  {'nome':{nw}}  {'quando':11}  {'projeto':32}  assunto")
     for i, s in enumerate(sessions, 1):
         when = when_label(s["mtime"])
         sid = s["id"] if full_id else s["id"][:8]
         proj = short(tilde(s["cwd"]), 32)
         state = " [rodando]" if s["running"] else ""
-        fixed = 2 + 2 + 6 + 2 + idw + 2 + 11 + 2 + 32 + 2
+        nm = short(s.get("name") or "—", nw)
+        fixed = 2 + 2 + 6 + 2 + idw + 2 + nw + 2 + 11 + 2 + 32 + 2
         title = short(s["title"], max(20, width - fixed - len(state))) + state
-        print(f"{i:>2}  {s['agent']:6}  {sid:{idw}}  {when:11}  {proj:32}  {title}")
+        print(f"{i:>2}  {s['agent']:6}  {sid:{idw}}  {nm:{nw}}  {when:11}  {proj:32}  {title}")
         if detail and s["last"] and s["last"] != s["title"]:
             print(f"{'':>{fixed}}↳ último pedido: {short(s['last'], max(20, width - fixed - 17))}")
 
@@ -231,7 +241,7 @@ def applescript_str(text):
 
 
 def open_tab(s):
-    name = f"{s['agent']} · {os.path.basename(s['cwd'].rstrip('/')) or s['cwd']}"
+    name = s.get("name") or f"{s['agent']} · {os.path.basename(s['cwd'].rstrip('/')) or s['cwd']}"
     script = f'''
 tell application "iTerm"
   activate
