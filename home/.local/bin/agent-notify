@@ -7,8 +7,11 @@ set -u
 title="${1:-Agente}"
 message="${2:-Tarefa concluída}"
 
+# Lê o JSON do hook com prazo: no shell de um agente o stdin é um pipe que
+# nunca fecha, e um `cat` sem prazo travaria para sempre.
 if [[ ! -t 0 ]]; then
-  payload="$(cat)"
+  payload=""
+  IFS= read -r -d '' -t 1 payload || true
   from_json="$(printf '%s' "$payload" | /usr/bin/python3 -I -c 'import json,sys
 try: print(json.load(sys.stdin).get("message",""))
 except Exception: pass' 2>/dev/null)"
