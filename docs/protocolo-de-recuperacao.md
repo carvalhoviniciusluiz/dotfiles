@@ -189,6 +189,13 @@ dias. Vale a mesma conta.
 Avise o usuário com a data. Ele pode comprar créditos (`/usage-credits`) ou
 esperar.
 
+### 2.5 Mac acordado
+
+O lembrete e a continuação automática só funcionam com o Claude Code
+aberto e o Mac acordado. Se o Mac dormir mais de cerca de 30 minutos, a
+continuação pede Enter. Para trabalho que espera o reset, o usuário pode
+rodar `caffeinate -i` no terminal; quem decide é ele.
+
 ### 2.6 Relatório de reset (para calibrar este protocolo)
 
 Regra do usuário (2026-11-14). Toda virada de janela fica registrada. Com
@@ -245,13 +252,6 @@ agent-usage reset-report --projeto <nome> \
 
 Isto **NÃO** significa parar o trabalho para escrever o relatório no meio
 de um passo. Termine o passo em andamento e registre logo em seguida.
-
-### 2.5 Mac acordado
-
-O lembrete e a continuação automática só funcionam com o Claude Code
-aberto e o Mac acordado. Se o Mac dormir mais de cerca de 30 minutos, a
-continuação pede Enter. Para trabalho que espera o reset, o usuário pode
-rodar `caffeinate -i` no terminal; quem decide é ele.
 
 ## 3. Recuperação: depois da parada
 
