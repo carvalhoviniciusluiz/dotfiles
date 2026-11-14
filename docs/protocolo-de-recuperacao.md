@@ -48,7 +48,7 @@ Princípios:
   olhando, nem `--dangerously-skip-permissions`. O recurso nativo já cobre
   a retomada, com as permissões valendo.
 
-## 2. Saúde da cota: pausar em 90% e retomar depois do reset
+## 2. Saúde da cota: pausar em 90% (ou atravessar, se o reset estiver perto) e retomar depois do reset
 
 Regra do usuário (2026-11-14):
 
@@ -70,8 +70,10 @@ A cota é da conta inteira, não de uma sessão. Há duas medidas, e vale a
 O Claude Code só entrega esses números à barra de status. A barra grava os
 números para os agentes com `agent-usage record`. Depois disso:
 
-- `agent-usage status` mostra o uso; a saída é 0 (ok), 1 (≥ 70%),
-  2 (≥ 90%: pausar) ou 3 (sem dado);
+- `agent-usage status` mostra o uso, o ritmo de gasto da janela de 5 h
+  (pontos por minuto, medido nos últimos 30 min), a **projeção no reset**
+  e o **modo**. Saídas: 0 (OK), 1 (ATENÇÃO, ≥ 70%), 2 (PAUSAR),
+  3 (sem dado), 4 (TRAVESSIA);
 - o comando `/usage` mostra a mesma coisa ao usuário.
 
 Uma janela que já virou conta como zero, mesmo antes de chegar dado novo.
@@ -82,13 +84,20 @@ Quanto mais perto do teto, mais frequente. O hook `agent-usage hook` faz
 isso sozinho a cada ferramenta usada (agente e subagentes). Ele só fala
 quando chega a hora:
 
-| Uso (maior das duas) | Aviso ao agente   | O que fazer                                          |
-| -------------------- | ----------------- | ---------------------------------------------------- |
-| < 50%                | nenhum            | trabalhar normalmente                                |
-| 50–69%               | a cada 30 min     | trabalhar normalmente                                |
-| 70–79%               | a cada 10 min     | passos curtos; estado de retomada a cada passo       |
-| 80–89%               | a cada 3 min      | terminar o que começou; não abrir tarefa grande nova |
-| ≥ 90%                | a cada ferramenta | **pausa segura agora** (2.3)                         |
+| Uso (maior das duas) | Aviso ao agente   | O que fazer                                            |
+| -------------------- | ----------------- | ------------------------------------------------------ |
+| < 50%                | nenhum            | trabalhar normalmente                                  |
+| 50–69%               | a cada 30 min     | trabalhar normalmente                                  |
+| 70–79%               | a cada 10 min     | passos curtos; estado de retomada a cada passo         |
+| 80–89%               | a cada 3 min      | terminar o que começou; não abrir tarefa grande nova   |
+| TRAVESSIA (2.3A)     | a cada 3 min      | **seguir trabalhando**; nada novo; estado a cada passo |
+| PAUSAR               | a cada ferramenta | **pausa segura agora** (2.3)                           |
+
+O modo vem do `agent-usage status`, na janela que estiver pior:
+
+- **PAUSAR:** uso ≥ 97%; ou uso ≥ 90% sem que o caso seja de travessia.
+- **TRAVESSIA:** uso ≥ 85%, reset em até 30 min e projeção no reset
+  < 97%. Sem ritmo medido, só vale com o reset em até 15 min.
 
 Sem o hook (projeto sem a barra, Codex):
 
@@ -126,6 +135,39 @@ agente principal):
    - a resposta "PAUSADO COM SEGURANÇA — retomo às HH:MM", com a lista do
      registro.
 7. Termina o turno e espera.
+
+### 2.3A Travessia: perto do teto, mas o reset também está perto
+
+Regra do usuário (2026-11-14). Pausar a poucos minutos do reset só para
+retomar logo depois desperdiça tempo, e por isso não se pausa. O sistema
+mede o ritmo de gasto e projeta o uso na hora do reset. Se a projeção ficar
+abaixo de 97%, entra em **travessia**:
+
+1. **Ninguém pausa.** O agente principal e os subagentes continuam
+   trabalhando.
+2. **Nada novo antes do reset.** Nenhum agente, subagente ou tarefa nova
+   é aberto ou despachado; só continua o que já está rodando.
+3. **Estado a cada passo.** Cada subagente grava o estado de retomada
+   (state.md) ao fim de cada passo, para o caso de a conta sair errada.
+4. **O agente principal avisa os subagentes vivos** que é travessia, sem
+   pausa: "TRAVESSIA ATÉ HH:MM: sigam trabalhando, estado a cada passo,
+   nada novo". Ele avisa também o usuário, numa linha.
+5. **Conferência a cada 3 a 5 min** com `agent-usage status` (o hook
+   lembra a cada 3 min).
+6. **Saída para a pausa completa (2.3):** se o modo virar PAUSAR. Isso
+   acontece quando o uso chega a 97% ou quando a projeção no reset passa
+   de 97% (o ritmo subiu). É improvável, mas a pausa sai limpa porque o
+   estado já está em dia.
+7. **Depois do reset**, volta a regra normal: o modo cai para OK sozinho.
+   Avise "TRAVESSIA CONCLUÍDA" e libere os despachos.
+
+Isto **NÃO** significa:
+
+- seguir trabalhando com uso ≥ 90% e o reset longe. Aí é pausa (2.3);
+- abrir trabalho novo "porque falta pouco".
+
+A cota semanal raramente entra em travessia, porque o reset dela fica a
+dias. Vale a mesma conta.
 
 ### 2.4 A retomada (depois do reset)
 
