@@ -6,11 +6,12 @@ via `~/.claude/CLAUDE.md`, pelo Claude Code). As regras de cada repositório
 
 ## Protocolos desta máquina: leia antes de agir
 
-| Antes de…                                                                                                                                                                                        | Siga                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **instalar, atualizar ou remover** qualquer coisa fora das dependências do projeto (programa, linguagem, pacote global, MCP, skill, serviço, alias, PATH, helper de projeto fora do repositório) | `~/Development/dotfiles/docs/protocolo-de-instalacao.md`. Quem executa é o agente instalador `INSTALADOR_MACOS`. Skill `machine-installs` |
-| **atualizar versões** (o instalador conduz)                                                                                                                                                      | `~/Development/dotfiles/docs/protocolo-de-atualizacao.md` e `updates-check`                                                               |
-| **decidir onde pôr** arquivos, atalhos, insumos, relatórios e temporários                                                                                                                        | Seção "Organização" abaixo                                                                                                                |
+| Antes de…                                                                                                                                                                                        | Siga                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **instalar, atualizar ou remover** qualquer coisa fora das dependências do projeto (programa, linguagem, pacote global, MCP, skill, serviço, alias, PATH, helper de projeto fora do repositório) | `~/Development/dotfiles/docs/protocolo-de-instalacao.md`. Quem executa é o agente instalador `3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`. Skill `machine-installs` |
+| **atualizar versões** (o instalador conduz)                                                                                                                                                      | `~/Development/dotfiles/docs/protocolo-de-atualizacao.md` e `updates-check`                                                                                   |
+| **retomar depois de uma parada abrupta** (limite de uso, erro da API, Mac travado) ou **pausar perto do limite**                                                                                 | `~/Development/dotfiles/docs/protocolo-de-recuperacao.md`: conferir com prova antes de agir; ponto de retomada em arquivo                                     |
+| **decidir onde pôr** arquivos, atalhos, insumos, relatórios e temporários                                                                                                                        | Seção "Organização" abaixo                                                                                                                                    |
 
 ## Idioma
 
@@ -31,7 +32,7 @@ via `~/.claude/CLAUDE.md`, pelo Claude Code). As regras de cada repositório
 ## Regras de instalação
 
 - **Toda instalação passa pelo agente instalador.** Por decisão do usuário,
-  a sessão **`INSTALADOR_MACOS`** é a responsável pelas instalações nesta
+  a sessão **`3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`** é a responsável pelas instalações nesta
   máquina. Antes de instalar, compilar para instalar, baixar e deixar na
   máquina, ou registrar qualquer ferramenta, helper, programa, app, MCP,
   skill, serviço ou atalho fora da pasta de trabalho do projeto, mande a
@@ -188,6 +189,7 @@ curta, código de saída 0 = ok. Rode `<comando> --help` para detalhes.
 | Antes de iniciar algo pesado    | `sysload` (memória livre, swap, maiores consumidores); saída 1 = memória sob pressão → não inicie mais nada.                                                                                                                     |
 | Há versão nova de algo?         | `updates-check` (`--all`, `--only asdf\|bin\|npm\|outros`): compara o dotfiles com a última versão publicada; só lê. Saída 1 = há atualização → siga `docs/protocolo-de-atualizacao.md` (com o agente instalador).               |
 | Retomar agentes após travamento | `agents-restore` lista sessões recentes do Claude/Codex (id, pasta, assunto, `[rodando]`) e reabre cada uma numa aba do iTerm (`claude --resume` / `codex resume`). `--list`, `--all`, números ou ids, `--hours N`, `--dry-run`. |
+| Saúde da cota (5 h e semana)    | `agent-usage status` (0 ok, 1 ≥ 70%, 2 ≥ 90% = pausa segura, 3 sem dado). Em 90% o agente principal pausa os subagentes e retoma depois do reset: `docs/protocolo-de-recuperacao.md` §2                                          |
 | Avisar o usuário                | `agent-notify "<título>" "<mensagem>"` (notificação do macOS).                                                                                                                                                                   |
 
 Skills do usuário (Claude Code e Codex): `/commit`, `/pr` (só quando o usuário
@@ -378,7 +380,7 @@ Os comparadores dão uma nota de semelhança e ignoram o que se mexe sozinho
   em 1 por causa dos 8 GB.
 - Não reinstale a skill dele (`setup` sem `--no-skill`): ela disputaria os
   mesmos pedidos com a skill do REA.
-- Versão nova: passa pelo agente instalador (`INSTALADOR_MACOS`), que
+- Versão nova: passa pelo agente instalador (`3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`), que
   confere o changelog, o SHA-256 e a assinatura e atualiza
   `versions.env`.
 

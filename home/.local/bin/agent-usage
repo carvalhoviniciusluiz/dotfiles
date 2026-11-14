@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Saúde da cota do Claude Code (janela de 5 horas e semana) para agentes.
+#   agent-usage record   lê o JSON da barra de status (stdin) e guarda o uso
+#   agent-usage status   mostra o uso; saída 0 ok, 1 atenção (>=70%),
+#                        2 pausar (>=90%), 3 sem dado
+#   agent-usage hook     para hooks (UserPromptSubmit/PostToolUse): avisa o
+#                        agente com frequência maior quanto mais perto do teto
+# A cota é da conta inteira: qualquer sessão que atualize a barra alimenta o
+# mesmo arquivo. Protocolo: ~/Development/dotfiles/docs/protocolo-de-recuperacao.md §2.
+set -uo pipefail
+
+state="${AGENT_USAGE_DIR:-$HOME/.local/state/agent-usage}"
+file="$state/usage.json"
+readonly PAUSE_AT=90 WARN_AT=70 STALE_AFTER=900
+now="$(date +%s)"
+
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
+
+json_get() { jq -r "$1 // empty" 2>/dev/null; }
+
+int() { # parte inteira de um número; vazio se não for número
+  case "$1" in '' | *[!0-9.]*) printf '' ;; *) printf '%s' "${1%%.*}" ;; esac
+}
+
+hhmm() { # epoch -> "17:50" (hoje) ou "sáb 00:00"
+  [[ -z "$1" ]] && return
+  if [[ "$(date -r "$1" +%F)" == "$(date +%F)" ]]; then date -r "$1" +%H:%M; else date -r "$1" '+%a %H:%M'; fi
+}
+
+record() {
+  local input five fiver week weekr
+  input="$(cat 2>/dev/null || true)"
+  five="$(int "$(printf '%s' "$input" | json_get .rate_limits.five_hour.used_percentage)")"
+  week="$(int "$(printf '%s' "$input" | json_get .rate_limits.seven_day.used_percentage)")"
+  fiver="$(int "$(printf '%s' "$input" | json_get .rate_limits.five_hour.resets_at)")"
+  weekr="$(int "$(printf '%s' "$input" | json_get .rate_limits.seven_day.resets_at)")"
+  [[ -z "$five$week" ]] && return 0
+  mkdir -p "$state" 2>/dev/null || return 0
+  printf '{"five":%s,"five_reset":%s,"week":%s,"week_reset":%s,"ts":%s}\n' \
+    "${five:-null}" "${fiver:-null}" "${week:-null}" "${weekr:-null}" "$now" >"$file.$$" 2>/dev/null &&
+    mv -f "$file.$$" "$file" 2>/dev/null
+  return 0
+}
+
+# Lê o arquivo e define: five week five_reset week_reset age top
+load() {
+  five="" week="" five_reset="" week_reset="" age="" top=""
+  [[ -f "$file" ]] || return 1
+  local ts
+  read -r five five_reset week week_reset ts < <(jq -r '[.five, .five_reset, .week, .week_reset, .ts] | map(. // "-") | @tsv' "$file" 2>/dev/null) || return 1
+  [[ "$five" == "-" ]] && five=""
+  [[ "$week" == "-" ]] && week=""
+  [[ "$five_reset" == "-" ]] && five_reset=""
+  [[ "$week_reset" == "-" ]] && week_reset=""
+  [[ -z "$ts" || "$ts" == "-" ]] && return 1
+  age=$((now - ts))
+  # Janela que já virou: o uso dela voltou a zero, mesmo sem dado novo.
+  [[ -n "$five_reset" && "$now" -ge "$five_reset" ]] && five=0
+  [[ -n "$week_reset" && "$now" -ge "$week_reset" ]] && week=0
+  top="${five:-0}"
+  [[ "${week:-0}" -gt "$top" ]] && top="$week"
+  return 0
+}
+
+line() {
+  printf '5h %s%% (zera %s) · semana %s%% (zera %s)' \
+    "${five:-?}" "$(hhmm "$five_reset")" "${week:-?}" "$(hhmm "$week_reset")"
+}
+
+status() {
+  if ! load; then
+    echo "sem dado: nenhuma sessão com a barra de status gravou o uso ainda"
+    exit 3
+  fi
+  local stale=""
+  [[ "$age" -gt "$STALE_AFTER" ]] && stale=" · dado de $((age / 60)) min atrás"
+  if [[ "${1:-}" == "--json" ]]; then
+    printf '{"five":%s,"five_reset":%s,"week":%s,"week_reset":%s,"age":%s,"top":%s}\n' \
+      "${five:-null}" "${five_reset:-null}" "${week:-null}" "${week_reset:-null}" "$age" "$top"
+  else
+    echo "$(line)$stale"
+  fi
+  if [[ "$top" -ge "$PAUSE_AT" ]]; then exit 2; elif [[ "$top" -ge "$WARN_AT" ]]; then exit 1; fi
+  exit 0
+}
+
+hook() {
+  local input event key interval band last_ts last_band msg mark
+  input="$(cat 2>/dev/null || true)"
+  load || exit 0
+  [[ "$age" -gt "$STALE_AFTER" ]] && exit 0
+  event="$(printf '%s' "$input" | json_get .hook_event_name)"
+  key="$(printf '%s' "$input" | json_get .session_id)-$(printf '%s' "$input" | json_get .agent_id)"
+  [[ "$key" == "-" ]] && exit 0
+
+  # Quanto mais perto do teto, mais frequente o aviso.
+  if [[ "$top" -ge "$PAUSE_AT" ]]; then band=4 interval=0
+  elif [[ "$top" -ge 80 ]]; then band=3 interval=180
+  elif [[ "$top" -ge "$WARN_AT" ]]; then band=2 interval=600
+  elif [[ "$top" -ge 50 ]]; then band=1 interval=1800
+  else exit 0
+  fi
+
+  mark="$state/hook-$key"
+  [[ -f "$mark" ]] && read -r last_ts last_band <"$mark"
+  if [[ "$band" -le "${last_band:-0}" && $((now - ${last_ts:-0})) -lt "$interval" ]]; then exit 0; fi
+  printf '%s %s\n' "$now" "$band" >"$mark" 2>/dev/null
+
+  if [[ "$band" -eq 4 ]]; then
+    msg="COTA >= ${PAUSE_AT}% ($(line)): PAUSA SEGURA AGORA (protocolo-de-recuperacao.md §2). Não comece nada novo. Subagente: termine só o passo atual, grave o estado de retomada (state.md da tarefa), responda 'PAUSADO: <ponto exato>' e pare. Agente principal/coordenador: mande a pausa a cada subagente vivo, espere os PAUSADO, grave o registro da pausa, agende a retomada para depois do reset e avise o usuário."
+    # Notificação ao usuário uma vez por janela.
+    local once="$state/notified-${five_reset:-x}"
+    if [[ ! -f "$once" ]] && command -v agent-notify >/dev/null; then
+      : >"$once"
+      agent-notify "Cota do Claude em ${top}%" "Agentes pausando com segurança; retomam depois de $(hhmm "$five_reset")" </dev/null >/dev/null 2>&1 &
+    fi
+  elif [[ "$band" -eq 3 ]]; then
+    msg="Cota em ${top}% ($(line)). Faixa 80–89%: só termine o que já começou e mantenha o estado de retomada em dia; em ${PAUSE_AT}% vem a pausa segura."
+  elif [[ "$band" -eq 2 ]]; then
+    msg="Cota em ${top}% ($(line)). Prefira passos curtos e grave o estado de retomada a cada passo."
+  else
+    msg="Cota em ${top}% ($(line))."
+  fi
+
+  if [[ "$event" == "PostToolUse" ]]; then
+    jq -cn --arg m "$msg" '{hookSpecificOutput:{hookEventName:"PostToolUse",additionalContext:$m}}'
+  else
+    echo "$msg"
+  fi
+  exit 0
+}
+
+case "${1:-}" in
+  record) record ;;
+  status) shift; status "$@" ;;
+  hook) hook ;;
+  -h | --help | "") usage ;;
+  *) usage; exit 64 ;;
+esac
