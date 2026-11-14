@@ -1,7 +1,7 @@
 # Protocolo de atualização
 
 Como atualizar os programas desta máquina sem quebrar o que já funciona. Quem
-conduz é o agente instalador (sessão `INSTALADOR_MACOS`; veja "Regras de
+conduz é o agente instalador (sessão `3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`; veja "Regras de
 instalação" no `AGENTS.md` global). Outro agente que precise de uma versão nova
 pede a ele. O usuário aprova o que muda o comportamento dos programas e o
 commit.

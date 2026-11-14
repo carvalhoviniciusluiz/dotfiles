@@ -1,12 +1,12 @@
 ---
 name: machine-installs
-description: Required before installing, updating or removing anything on this Mac outside the project's own dependency folders — apps, CLIs, binaries, language versions (asdf), global packages (npm -g, uv tool, pip, cargo install, brew), MCP servers, skills, hooks, LaunchAgents, services, Docker volumes left behind, aliases, PATH or ~/.zshrc changes, links in ~/.local/bin, the dotfiles or the global AGENTS.md — and before placing a project's helper or tool outside its repository. Routes the request to the machine's installer agent (INSTALADOR_MACOS) and tells you what to do while it answers.
+description: Required before installing, updating or removing anything on this Mac outside the project's own dependency folders — apps, CLIs, binaries, language versions (asdf), global packages (npm -g, uv tool, pip, cargo install, brew), MCP servers, skills, hooks, LaunchAgents, services, Docker volumes left behind, aliases, PATH or ~/.zshrc changes, links in ~/.local/bin, the dotfiles or the global AGENTS.md — and before placing a project's helper or tool outside its repository. Routes the request to the machine's installer agent (3a3a3d6b-f6dc-4825-b197-36cfbf0ac448) and tells you what to do while it answers.
 ---
 
 # Installs, updates and removals on this Mac
 
 The user made one agent responsible for every install, update and removal on
-this machine: the session **`INSTALADOR_MACOS`**. You do not install things
+this machine: the session **`3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`**. You do not install things
 yourself. Full rules (Portuguese):
 
 - `~/Development/dotfiles/docs/protocolo-de-instalacao.md`: who, when, how
@@ -30,7 +30,7 @@ yourself. Full rules (Portuguese):
 
 ## Steps
 
-1. Run `ListAgents`. If `INSTALADOR_MACOS` is listed, send it the request
+1. Run `ListAgents`. If `3a3a3d6b-f6dc-4825-b197-36cfbf0ac448` is listed, send it the request
    below with `SendMessage` and **wait for its answer** before installing.
    You may continue with work that does not depend on it.
 2. If it is not listed or does not answer:
@@ -38,7 +38,7 @@ yourself. Full rules (Portuguese):
      `~/.local/share/instalador/fila/YYYY-MM-DD-<project>-<item>.md`;
    - tell the user, in Portuguese: "Preciso do agente instalador para:
      <resumo>. Ficha em <path>. Para ativá-lo: `agents-restore --list` e
-     retome a sessão INSTALADOR_MACOS, ou abra uma sessão nova com o prompt
+     retome a sessão 3a3a3d6b-f6dc-4825-b197-36cfbf0ac448, ou abra uma sessão nova com o prompt
      de ativação de `docs/protocolo-de-instalacao.md` (seção 6)."
    - Never reopen sessions yourself, and never work around the request by
      installing somewhere else.

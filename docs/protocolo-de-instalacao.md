@@ -4,7 +4,7 @@ Como pôr, atualizar e tirar programas desta máquina sem bagunçar o sistema.
 Vale para todo agente (Claude Code, Codex) e todo TL de todo projeto. Por
 decisão do usuário, há **um responsável** por qualquer instalação,
 atualização ou remoção: o **agente instalador**, uma sessão chamada
-`INSTALADOR_MACOS`. Ele não fica ativo o tempo todo, e este protocolo diz
+`3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`. Ele não fica ativo o tempo todo, e este protocolo diz
 como chamá-lo, o que fazer enquanto ele não responde e como outra sessão
 assume o papel.
 
@@ -42,8 +42,8 @@ Na dúvida, pergunte ao instalador.
 
 ## 2. Como chamar
 
-1. **Procure a sessão:** `ListAgents`. Se `INSTALADOR_MACOS` aparecer, mande
-   a ficha (seção 3) com `SendMessage` (`to: "INSTALADOR_MACOS"`) e **espere
+1. **Procure a sessão:** `ListAgents`. Se `3a3a3d6b-f6dc-4825-b197-36cfbf0ac448` aparecer, mande
+   a ficha (seção 3) com `SendMessage` (`to: "3a3a3d6b-f6dc-4825-b197-36cfbf0ac448"`) e **espere
    a resposta** antes de instalar. Pode seguir com outras tarefas enquanto
    isso.
 2. **Se ele não aparecer**, ou não responder:
@@ -52,7 +52,7 @@ Na dúvida, pergunte ao instalador.
 
      > Preciso do agente instalador para: `<resumo>`. A ficha está em
      > `~/.local/share/instalador/fila/<arquivo>`. Para ativá-lo:
-     > `agents-restore --list` e retome a sessão `INSTALADOR_MACOS`, ou abra
+     > `agents-restore --list` e retome a sessão `3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`, ou abra
      > uma sessão nova (Claude Code, na pasta `~/Development/dotfiles`) com
      > o prompt de ativação da seção 6.
 
@@ -130,11 +130,13 @@ feito | instruído | recusado`, com a data), move-a para
 ## 6. Prompt de ativação (para o usuário)
 
 Para retomar o instalador: `agents-restore --list` e retome a sessão
-`INSTALADOR_MACOS`. Para criar um sucessor, abra o Claude Code em
-`~/Development/dotfiles`, dê à sessão o nome `INSTALADOR_MACOS` e envie:
+`3a3a3d6b-f6dc-4825-b197-36cfbf0ac448`. Para criar um sucessor, abra o Claude Code em
+`~/Development/dotfiles`, dê à sessão o próprio id dela como nome
+(`/rename <id>`), troque o id antigo pelo novo neste protocolo, no
+`AGENTS.md` global e na skill `machine-installs`, e envie:
 
 ```text
-Você é o agente instalador desta máquina (INSTALADOR_MACOS). Toda instalação,
+Você é o agente instalador desta máquina (3a3a3d6b-f6dc-4825-b197-36cfbf0ac448). Toda instalação,
 atualização e remoção passa por você. Antes de qualquer coisa leia:
 1. ~/.codex/AGENTS.md (seções "Regras de instalação" e "Organização");
 2. ~/Development/dotfiles/docs/protocolo-de-instalacao.md e
