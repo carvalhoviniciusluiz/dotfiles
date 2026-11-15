@@ -28,6 +28,14 @@ hist="$state/history.tsv"
 data="${AGENT_USAGE_DATA:-$HOME/.local/share/agent-usage}"
 resets="$data/resets.jsonl"
 readonly WARN_AT=70 PAUSE_AT=90 NEAR_AT=85 HARD_AT=97
+# Decisão do usuário pode subir a pausa da SEMANA (ex.: "vamos até 100%"):
+# arquivo ~/.local/share/agent-usage/config com WEEK_PAUSE_AT=<n> (máx. 97).
+WEEK_PAUSE_AT=$PAUSE_AT
+cfg="${AGENT_USAGE_DATA:-$HOME/.local/share/agent-usage}/config"
+if [[ -f "$cfg" ]]; then
+  v="$(sed -n 's/^WEEK_PAUSE_AT=\([0-9]*\)$/\1/p' "$cfg" | tail -1)"
+  [[ -n "$v" ]] && WEEK_PAUSE_AT=$((v > HARD_AT ? HARD_AT : v))
+fi
 readonly SOON_MIN=30 SOON_NO_RATE_MIN=15 RATE_WINDOW_MIN=30 STALE_AFTER=900
 now="${AGENT_USAGE_NOW:-$(date +%s)}"
 
@@ -111,8 +119,8 @@ rate_of() { # col reset pct -> imprime ritmo x100 ou nada
 }
 
 # Decide o modo de uma janela. Define: w_mode (0 ok … 5 pausar) w_why w_proj w_min w_rate
-decide_window() { # nome pct reset col
-  local name="$1" pct="$2" reset="$3" col="$4"
+decide_window() { # nome pct reset col [pausa]
+  local name="$1" pct="$2" reset="$3" col="$4" pause="${5:-$PAUSE_AT}"
   w_mode=0 w_why="" w_proj="" w_min="" w_rate=""
   [[ -z "$pct" ]] && return
   [[ -n "$reset" ]] && w_min=$(((reset - now) / 60))
@@ -123,7 +131,7 @@ decide_window() { # nome pct reset col
   elif [[ "$pct" -ge "$NEAR_AT" && -n "$w_min" && "$w_min" -le "$SOON_MIN" ]] &&
     { [[ -n "$w_proj" && "$w_proj" -lt "$HARD_AT" ]] || [[ -z "$w_proj" && "$w_min" -le "$SOON_NO_RATE_MIN" ]]; }; then
     w_mode=4 w_why="$name em ${pct}%, reset em ${w_min} min, projeção no reset ${w_proj:-sem ritmo medido}%"
-  elif [[ "$pct" -ge "$PAUSE_AT" ]]; then
+  elif [[ "$pct" -ge "$pause" ]]; then
     w_mode=5 w_why="$name em ${pct}% e o reset não está perto (${w_min:-?} min; projeção ${w_proj:-?}%)"
   elif [[ "$pct" -ge 80 ]]; then w_mode=3
   elif [[ "$pct" -ge "$WARN_AT" ]]; then w_mode=2
@@ -135,7 +143,7 @@ decide_window() { # nome pct reset col
 decide() {
   local m5 y5 m7 y7
   decide_window "5h" "$five" "$five_reset" 2; m5=$w_mode y5=$w_why proj5=$w_proj rate5=$w_rate
-  decide_window "semana" "$week" "$week_reset" 4; m7=$w_mode y7=$w_why
+  decide_window "semana" "$week" "$week_reset" 4 "$WEEK_PAUSE_AT"; m7=$w_mode y7=$w_why
   top="${five:-0}"; [[ "${week:-0}" -gt "$top" ]] && top="$week"
   if [[ "$m7" -gt "$m5" ]]; then mode=$m7 why=$y7 reset_at=$week_reset; else mode=$m5 why=$y5 reset_at=$five_reset; fi
 }
