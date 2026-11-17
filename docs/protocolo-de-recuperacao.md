@@ -84,18 +84,19 @@ Quanto mais perto do teto, mais frequente. O hook `agent-usage hook` faz
 isso sozinho a cada ferramenta usada (agente e subagentes). Ele só fala
 quando chega a hora:
 
-| Uso (maior das duas) | Aviso ao agente   | O que fazer                                            |
-| -------------------- | ----------------- | ------------------------------------------------------ |
-| < 50%                | nenhum            | trabalhar normalmente                                  |
-| 50–69%               | a cada 30 min     | trabalhar normalmente                                  |
-| 70–79%               | a cada 10 min     | passos curtos; estado de retomada a cada passo         |
-| 80–89%               | a cada 3 min      | terminar o que começou; não abrir tarefa grande nova   |
-| TRAVESSIA (2.3A)     | a cada 3 min      | **seguir trabalhando**; nada novo; estado a cada passo |
-| PAUSAR               | a cada ferramenta | **pausa segura agora** (2.3)                           |
+| Uso (maior das duas) | Aviso ao agente   | O que fazer                                                      |
+| -------------------- | ----------------- | ---------------------------------------------------------------- |
+| < 50%                | nenhum            | trabalhar normalmente                                            |
+| 50–69%               | a cada 30 min     | trabalhar normalmente                                            |
+| 70–79%               | a cada 10 min     | passos curtos; estado de retomada a cada passo                   |
+| 80–89%               | a cada 3 min      | **seguir trabalhando**; tarefa nova se a projeção no reset < 95% |
+| TRAVESSIA (2.3A)     | a cada 3 min      | **seguir trabalhando**; tarefa nova se a projeção < 95%          |
+| PAUSAR               | a cada ferramenta | **pausa segura agora** (2.3)                                     |
 
 O modo vem do `agent-usage status`, na janela que estiver pior:
 
 - **PAUSAR:** uso ≥ 97%; ou uso ≥ 90% sem que o caso seja de travessia.
+- **Faixa 80–89% e TRAVESSIA não param o trabalho.** Tarefa nova só não sai quando o uso está em 80% ou mais E a projeção da janela de 5 h no reset passa de 95% (`DISPATCH_PROJ_MAX`). Abaixo de 80% a projeção não conta (no começo da janela ela usa poucos minutos e exagera). Decisão do usuário de 2026-11-16, depois de um coordenador parar à toa 15 min antes do reset.
 - **TRAVESSIA:** uso ≥ 85%, reset em até 30 min e projeção no reset
   < 97%. Sem ritmo medido, só vale com o reset em até 15 min.
 

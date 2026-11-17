@@ -28,6 +28,9 @@ hist="$state/history.tsv"
 data="${AGENT_USAGE_DATA:-$HOME/.local/share/agent-usage}"
 resets="$data/resets.jsonl"
 readonly WARN_AT=70 PAUSE_AT=90 NEAR_AT=85 HARD_AT=97
+# Abaixo de 90%, despachar tarefa nova é permitido se a projeção da janela de
+# 5 h no reset ficar abaixo deste valor (decisão do usuário de 2026-11-16).
+readonly DISPATCH_PROJ_MAX=95
 # Decisão do usuário pode subir a pausa da SEMANA (ex.: "vamos até 100%"):
 # arquivo ~/.local/share/agent-usage/config com WEEK_PAUSE_AT=<n> (máx. 97).
 WEEK_PAUSE_AT=$PAUSE_AT
@@ -228,10 +231,16 @@ hook() {
       notify_once "pause-${reset_at:-x}" "Cota do Claude: pausa segura" "$why; retomada depois de $(hhmm "$reset_at")"
       ;;
     4)
-      msg="COTA: TRAVESSIA ATÉ O RESET ($(hhmm "$reset_at")) — $why. NINGUÉM PAUSA: continue trabalhando (protocolo-de-recuperacao.md §2.3A). Não abra nem despache agente ou tarefa nova antes do reset. Grave o estado de retomada (state.md) a cada passo. Coordenador: confira 'agent-usage status' a cada 3 a 5 min e avise os subagentes desta travessia. Pausa completa só se o modo virar PAUSAR (uso >= ${HARD_AT}% ou projeção >= ${HARD_AT}%)."
+      msg="COTA: TRAVESSIA ATÉ O RESET ($(hhmm "$reset_at")) — $why. NINGUÉM PAUSA: continue trabalhando (protocolo-de-recuperacao.md §2.3A). Tarefa nova só se a projeção no reset ficar abaixo de ${DISPATCH_PROJ_MAX}%; sem ritmo medido, espere o reset. Grave o estado de retomada (state.md) a cada passo. Coordenador: confira 'agent-usage status' a cada 3 a 5 min e avise os subagentes desta travessia. Pausa completa só se o modo virar PAUSAR (uso >= ${HARD_AT}% ou projeção >= ${HARD_AT}%)."
       notify_once "cross-${reset_at:-x}" "Cota do Claude: travessia" "$why; agentes seguem até o reset às $(hhmm "$reset_at")"
       ;;
-    3) msg="Cota em ${top}% ($(line)). Faixa 80–89%: só termine o que já começou e mantenha o estado de retomada em dia; em ${PAUSE_AT}% vem a pausa (ou a travessia, se o reset estiver perto)." ;;
+    3)
+      # A faixa 80–89% não para o trabalho: quem decide é a projeção no reset.
+      if [[ -n "${proj5:-}" && "$proj5" -lt "$DISPATCH_PROJ_MAX" ]]; then
+        msg="Cota em ${top}% ($(line)). Faixa 80–89% com folga: a projeção no reset é ${proj5}% (< ${DISPATCH_PROJ_MAX}%). TRABALHE NORMALMENTE e pode despachar tarefas novas; mantenha o estado de retomada em dia. Em ${PAUSE_AT}% vem a pausa (ou a travessia, se o reset estiver perto)."
+      else
+        msg="Cota em ${top}% ($(line)). Faixa 80–89% sem folga (projeção no reset ${proj5:-sem ritmo medido}%): termine o que já começou e só despache tarefa nova curta; mantenha o estado de retomada em dia. Em ${PAUSE_AT}% vem a pausa (ou a travessia, se o reset estiver perto)."
+      fi ;;
     2) msg="Cota em ${top}% ($(line)). Prefira passos curtos e grave o estado de retomada a cada passo." ;;
     *) msg="Cota em ${top}% ($(line))." ;;
   esac
