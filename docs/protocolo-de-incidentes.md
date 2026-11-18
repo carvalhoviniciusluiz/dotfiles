@@ -89,9 +89,10 @@ Para cada causa e para cada fator do relatório:
 
 **Travas que já existem:**
 
-| Trava                                               | O que barra                                                                                  | Desde      |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------- |
-| `agent-guard-kill` (hook `PreToolUse` Bash, global) | `pkill`, `killall` e `kill` sem um PID próprio (`0`, `-1`, grupo, `$(...)`, `\| xargs kill`) | 2026-11-14 |
+| Trava                                               | O que barra                                                                                                                                      | Desde      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `agent-guard-kill` (hook `PreToolUse` Bash, global) | `pkill`, `killall` e `kill` sem um PID próprio (`0`, `-1`, grupo, `$(...)`, `\| xargs kill`)                                                     | 2026-11-14 |
+| `agent-guard-rm` (hook `PreToolUse` Bash, global)   | `rm`, `rmdir`, `unlink` e `find -delete` fora do projeto atual (ou na raiz dele) e fora dos temporários do agente; alvo com variável ou `$(...)` | 2026-11-18 |
 
 ## 5. Revisar com o usuário
 

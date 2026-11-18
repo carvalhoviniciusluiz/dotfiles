@@ -596,6 +596,7 @@ Microsoft AutoUpdate, DockerHelper. Spotlight ignora `~/.asdf` e `~/.local`.
 ## Git e segurança
 
 - **Nunca mate processos por nome ou em massa** (`pkill`, `killall`, `kill 0`, `kill -1`, `| xargs kill`). Encerre só o PID que você mesmo iniciou (`kill <PID>`, `kill $!`, `bgrun stop`). O hook `agent-guard-kill` barra o resto (incidente de 2026-11-14).
+- **Nunca apague fora da pasta de trabalho.** `rm`, `rmdir`, `unlink` e `find -delete` só dentro do projeto atual (nunca a raiz dele) e nos temporários do agente (scratchpad, `/tmp/claude-<uid>`, `$TMPDIR`). Não apague o que você não criou. O hook `agent-guard-rm` barra o resto (incidente de 2026-11-18).
 - Não faça commit, push, merge ou force-push sem pedido explícito.
 - Nunca inclua segredos (tokens, senhas, chaves, `.env`) em commits; rode
   `gitleaks git --staged` antes de commitar quando houver dúvida.

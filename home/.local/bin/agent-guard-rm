@@ -1,0 +1,156 @@
+#!/usr/bin/python3 -I
+"""Hook PreToolUse (Bash) do Claude Code: barra `rm` que apaga fora da pasta de
+trabalho. Vale para o agente principal e para os subagentes.
+
+Permitido apagar só dentro de:
+  - o projeto em que o agente roda (raiz do Git da pasta atual; se não houver
+    Git, a própria pasta atual), mas nunca a raiz dele;
+  - os temporários do agente: /tmp/claude-<uid>, /private/tmp/claude-<uid> e
+    $TMPDIR.
+Nunca valem como projeto: a pasta pessoal, ~/Development e a raiz /.
+Barrado também: alvo que não dá para conferir (variável, $(...), crase) em rm
+recursivo, e `find ... -delete` / `-exec rm` fora dessas pastas.
+
+Incidente de 2026-11-18: um subagente apagou /tmp/x, que não era dele.
+Protocolo: ~/Development/dotfiles/docs/protocolo-de-incidentes.md.
+"""
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+
+HOME = os.path.realpath(os.path.expanduser("~"))
+NEVER_ROOTS = {"/", HOME, os.path.join(HOME, "Development")}
+REASON = (
+    "Bloqueado: apagar fora da pasta de trabalho. Pode apagar só dentro do projeto "
+    "atual (não a raiz dele) e nos temporários do agente (scratchpad, /tmp/claude-<uid>, "
+    "$TMPDIR). Se precisar apagar outra coisa, peça ao usuário. Alvo barrado: {t}. "
+    "Protocolo de incidentes."
+)
+
+
+def scratch_roots():
+    uid = os.getuid()
+    roots = [f"/tmp/claude-{uid}", f"/private/tmp/claude-{uid}"]
+    tmp = os.environ.get("TMPDIR")
+    if tmp:
+        roots.append(tmp)
+    return [os.path.realpath(r) for r in roots]
+
+
+def project_root(cwd):
+    try:
+        out = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=3)
+        root = out.stdout.strip() if out.returncode == 0 else cwd
+    except (OSError, subprocess.SubprocessError):
+        root = cwd
+    root = os.path.realpath(root)
+    return None if root in NEVER_ROOTS else root
+
+
+def inside(path, root):
+    return path == root or path.startswith(root.rstrip("/") + "/")
+
+
+def allowed(target, cwd, proj, scratch):
+    tmp = os.environ.get("TMPDIR")
+    if tmp:
+        target = re.sub(r"\$\{TMPDIR\}|\$TMPDIR\b", tmp.rstrip("/"), target)
+    if any(ch in target for ch in ("$", "`")):
+        return False
+    p = os.path.realpath(os.path.join(cwd, os.path.expanduser(target)))
+    if "*" in target or "?" in target:
+        # Glob: confere a pasta que o contém.
+        p = os.path.realpath(os.path.join(cwd, os.path.expanduser(os.path.dirname(target) or ".")))
+        if proj and p == proj:
+            return True  # proj/* é conteúdo do projeto, não a raiz
+    if proj and inside(p, proj) and p != proj:
+        return True
+    return any(inside(p, r) for r in scratch)
+
+
+def segments(command):
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
+    lexer.whitespace_split = True
+    seg = []
+    try:
+        for tok in lexer:
+            if tok and set(tok) <= set(";&|\n"):
+                yield seg
+                seg = []
+            else:
+                seg.append(tok)
+    except ValueError:
+        yield ["__unparsed__", command]
+        return
+    yield seg
+
+
+def bad_target(command, cwd, proj, scratch):
+    cur = cwd
+    for seg in segments(command):
+        words = [w for w in seg if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", w)]
+        while words and words[0] in ("sudo", "nohup", "command", "builtin", "exec", "xargs", "env", "nice"):
+            words = words[1:]
+        if not words:
+            continue
+        if words[0] == "__unparsed__":
+            return "rm" if re.search(r"(^|[\s;&|])rm\s", words[1]) else None
+        cmd = words[0].rsplit("/", 1)[-1]
+        if cmd == "cd" and len(words) > 1 and "$" not in words[1]:
+            cur = os.path.realpath(os.path.join(cur, os.path.expanduser(words[1])))
+            continue
+        if cmd in ("sh", "bash", "zsh") and "-c" in words:
+            i = words.index("-c")
+            if i + 1 < len(words):
+                t = bad_target(words[i + 1], cur, proj, scratch)
+                if t:
+                    return t
+            continue
+        if cmd == "find" and ("-delete" in words or ("-exec" in words and "rm" in words)):
+            starts = [w for w in words[1:] if not w.startswith("-")][:1] or ["."]
+            if not allowed(starts[0], cur, proj, scratch):
+                return starts[0]
+            continue
+        if cmd not in ("rm", "rmdir", "unlink"):
+            continue
+        args, opts_done = [], False
+        for w in words[1:]:
+            if not opts_done and w == "--":
+                opts_done = True
+            elif not opts_done and w.startswith("-") and w != "-":
+                continue
+            else:
+                args.append(w)
+        for t in args:
+            if not allowed(t, cur, proj, scratch):
+                return t
+    return None
+
+
+def main():
+    try:
+        data = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    if data.get("tool_name") != "Bash":
+        return 0
+    command = (data.get("tool_input") or {}).get("command") or ""
+    if not re.search(r"\b(rm|rmdir|unlink)\b|-delete", command):
+        return 0
+    cwd = os.path.realpath(data.get("cwd") or os.getcwd())
+    t = bad_target(command, cwd, project_root(cwd), scratch_roots())
+    if t:
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": REASON.format(t=t),
+        }}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

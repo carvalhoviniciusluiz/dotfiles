@@ -23,6 +23,11 @@
             "type": "command",
             "command": "{{HOME}}/.local/bin/agent-guard-kill",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "{{HOME}}/.local/bin/agent-guard-rm",
+            "timeout": 10
           }
         ]
       }
